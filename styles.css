@@ -263,9 +263,13 @@ html, body {
 .modal {
   position: fixed;
   inset: 0;
-  display: grid;
-  place-items: center;
+  /* flex + margin:auto on the card (not grid place-items:center) so that
+     when the card is taller than the viewport, it degrades to top-aligned
+     and scrollable instead of centering and clipping unreachable content
+     off both the top and bottom. */
+  display: flex;
   padding: 20px;
+  padding-bottom: max(20px, env(safe-area-inset-bottom));
   z-index: 10;
   overflow-y: auto;
 }
@@ -283,6 +287,7 @@ html, body {
   max-width: 400px;
   box-shadow: 0 12px 40px rgba(45, 20, 60, 0.28);
   margin: auto;
+  flex-shrink: 0;
 }
 .modal-card h2 {
   margin: 0 0 14px;
