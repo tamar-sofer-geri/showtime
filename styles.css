@@ -13,6 +13,9 @@
 
   --soon: #ea580c;
   --soon-bg: #fff1e8;
+
+  --marquee-gradient: linear-gradient(135deg, #8b5cf6, #ea580c);
+  --marquee-shadow: 0 4px 14px rgba(234, 88, 12, 0.35);
 }
 
 * { box-sizing: border-box; }
@@ -47,7 +50,13 @@ html, body {
   font-size: 26px;
 }
 .brand-title-thin { font-weight: 400; color: var(--muted); }
-.brand-title-bold { font-weight: 800; color: var(--accent-ink); }
+.brand-title-bold {
+  font-weight: 800;
+  background: var(--marquee-gradient);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
 
 .header-add-btn {
   flex: 0 0 auto;
@@ -56,7 +65,7 @@ html, body {
   height: 40px;
   border-radius: 50%;
   border: none;
-  background: var(--accent-strong);
+  background: var(--marquee-gradient);
   color: #fff;
   font-size: 22px;
   font-weight: 700;
@@ -65,7 +74,7 @@ html, body {
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: var(--shadow);
+  box-shadow: var(--marquee-shadow);
 }
 .header-add-btn:active { transform: scale(0.92); }
 
@@ -187,7 +196,7 @@ html, body {
   min-height: 40px;
 }
 .btn:active { transform: scale(0.96); }
-.btn-primary { background: var(--accent-ink); color: #fff; }
+.btn-primary { background: var(--marquee-gradient); color: #fff; box-shadow: var(--marquee-shadow); }
 .btn-ghost { background: transparent; color: var(--muted); }
 .btn-danger {
   background: transparent;
