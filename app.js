@@ -106,11 +106,7 @@
   }
 
   function formatTime(timeStr) {
-    if (!timeStr) return "";
-    const [h, m] = timeStr.split(":").map(Number);
-    const d = new Date();
-    d.setHours(h, m, 0, 0);
-    return d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+    return timeStr || "";
   }
 
   function formatPrice(price) {
@@ -240,7 +236,7 @@
     const soon = isUpcomingList && daysUntil(t) <= 7;
     card.className = "ticket-card" + (soon ? " is-soon" : "");
     card.tabIndex = 0;
-    card.addEventListener("click", () => openEditModal(t.id));
+    wireCardPress(card, t);
 
     if (t.fileBlob && t.fileType && t.fileType.startsWith("image/")) {
       const img = document.createElement("img");
@@ -292,6 +288,60 @@
     return li;
   }
 
+  // Short tap opens Edit; press-and-hold jumps straight to the attached
+  // ticket file, skipping the edit form entirely.
+  const LONG_PRESS_MS = 500;
+  const LONG_PRESS_MOVE_TOLERANCE = 10;
+
+  function wireCardPress(card, t) {
+    let pressTimer = null;
+    let longPressFired = false;
+    let startX = 0;
+    let startY = 0;
+
+    const cancelTimer = () => {
+      if (pressTimer) {
+        clearTimeout(pressTimer);
+        pressTimer = null;
+      }
+    };
+
+    card.addEventListener("pointerdown", (e) => {
+      if (e.pointerType === "mouse" && e.button !== 0) return;
+      longPressFired = false;
+      startX = e.clientX;
+      startY = e.clientY;
+      pressTimer = setTimeout(() => {
+        longPressFired = true;
+        openAttachmentForTicket(t);
+      }, LONG_PRESS_MS);
+    });
+
+    card.addEventListener("pointermove", (e) => {
+      if (Math.abs(e.clientX - startX) > LONG_PRESS_MOVE_TOLERANCE || Math.abs(e.clientY - startY) > LONG_PRESS_MOVE_TOLERANCE) {
+        cancelTimer();
+      }
+    });
+
+    card.addEventListener("pointerup", cancelTimer);
+    card.addEventListener("pointerleave", cancelTimer);
+    card.addEventListener("pointercancel", cancelTimer);
+
+    card.addEventListener("click", () => {
+      if (longPressFired) {
+        longPressFired = false;
+        return;
+      }
+      openEditModal(t.id);
+    });
+  }
+
+  function openAttachmentForTicket(t) {
+    if (!t.fileBlob) return;
+    const kind = t.fileType && t.fileType.startsWith("image/") ? "image" : "pdf";
+    openAttachment(trackUrl(URL.createObjectURL(t.fileBlob)), kind);
+  }
+
   // ---- Tabs ----
 
   const tabs = document.querySelectorAll(".tab");
@@ -327,7 +377,20 @@
   const timeInput = document.getElementById("time-input");
   const timeHourSelect = document.getElementById("time-hour");
   const timeMinuteSelect = document.getElementById("time-minute");
-  const timeAmPmSelect = document.getElementById("time-ampm");
+  const TIME_MINUTE_OPTIONS = ["00", "15", "30", "45"];
+
+  {
+    const placeholder = document.createElement("option");
+    placeholder.value = "";
+    placeholder.textContent = "--";
+    timeHourSelect.appendChild(placeholder);
+  }
+  for (let h = 0; h < 24; h++) {
+    const opt = document.createElement("option");
+    opt.value = String(h).padStart(2, "0");
+    opt.textContent = opt.value;
+    timeHourSelect.appendChild(opt);
+  }
 
   {
     const placeholder = document.createElement("option");
@@ -335,45 +398,39 @@
     placeholder.textContent = "--";
     timeMinuteSelect.appendChild(placeholder);
   }
-  for (let m = 0; m < 60; m++) {
+  for (const m of TIME_MINUTE_OPTIONS) {
     const opt = document.createElement("option");
-    opt.value = String(m).padStart(2, "0");
-    opt.textContent = opt.value;
+    opt.value = m;
+    opt.textContent = m;
     timeMinuteSelect.appendChild(opt);
   }
 
   function syncHiddenTime() {
     const h = timeHourSelect.value;
     const m = timeMinuteSelect.value;
-    const ap = timeAmPmSelect.value;
-    if (!h || !m || !ap) {
-      timeInput.value = "";
-      return;
-    }
-    let hh = parseInt(h, 10);
-    if (ap === "PM" && hh !== 12) hh += 12;
-    if (ap === "AM" && hh === 12) hh = 0;
-    timeInput.value = `${String(hh).padStart(2, "0")}:${m}`;
+    timeInput.value = h && m ? `${h}:${m}` : "";
   }
 
   function setTimeSelects(value) {
     if (!value) {
       timeHourSelect.value = "";
       timeMinuteSelect.value = "";
-      timeAmPmSelect.value = "";
       syncHiddenTime();
       return;
     }
-    const [hh, mm] = value.split(":").map(Number);
-    let h12 = hh % 12;
-    if (h12 === 0) h12 = 12;
-    timeHourSelect.value = String(h12);
-    timeMinuteSelect.value = String(mm).padStart(2, "0");
-    timeAmPmSelect.value = hh >= 12 ? "PM" : "AM";
+    let [hh, mm] = value.split(":").map(Number);
+    // Snap to the nearest quarter-hour option, rolling the hour over if needed.
+    let roundedMin = Math.round(mm / 15) * 15;
+    if (roundedMin === 60) {
+      roundedMin = 0;
+      hh = (hh + 1) % 24;
+    }
+    timeHourSelect.value = String(hh).padStart(2, "0");
+    timeMinuteSelect.value = String(roundedMin).padStart(2, "0");
     syncHiddenTime();
   }
 
-  [timeHourSelect, timeMinuteSelect, timeAmPmSelect].forEach((sel) => sel.addEventListener("change", syncHiddenTime));
+  [timeHourSelect, timeMinuteSelect].forEach((sel) => sel.addEventListener("change", syncHiddenTime));
 
   function openAddModal(prefill) {
     editingId = null;

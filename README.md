@@ -7,7 +7,7 @@ Two tabs, switched via the bottom bar:
 - **Upcoming** — sorted soonest first, with a countdown badge (Today! / Tomorrow / In N days). Shows within 7 days get a highlighted orange card as an in-app reminder.
 - **Past** — sorted most recent first.
 
-Tap **+** to add a ticket: show/event name, venue, date & time, price paid, seat/section, where you bought it, confirmation number, and an optional photo/PDF of the actual ticket (which typically has the barcode on it already). Tap any ticket card to view/edit it or delete it.
+Tap **+** to add a ticket: show/event name, venue, date & time (24-hour, quarter-hour increments), price paid, seat/section, where you bought it, confirmation number, and an optional photo/PDF of the actual ticket (which typically has the barcode on it already). On a ticket card: a short tap opens **Edit**; press and hold opens the attached ticket photo/PDF directly, without going through Edit first.
 
 All data — including the attached ticket photo/PDF — is stored locally on-device in IndexedDB. Nothing leaves the device; there's no backend or sync (yet).
 

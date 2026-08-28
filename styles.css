@@ -89,6 +89,10 @@ html, body {
   box-shadow: var(--shadow);
   padding: 10px 12px;
   cursor: pointer;
+  touch-action: manipulation;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
 }
 .ticket-card:active { opacity: 0.75; }
 
