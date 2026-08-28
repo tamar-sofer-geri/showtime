@@ -276,6 +276,30 @@ html, body {
 .modal-card input:focus { border-color: var(--accent-strong); }
 .modal-card input[type="file"] { padding: 8px 4px; border: none; }
 
+.time-picker {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.time-picker select {
+  flex: 1 1 0;
+  min-width: 0;
+  padding: 12px 8px;
+  font-size: 16px;
+  font-family: inherit;
+  border: 1.5px solid var(--line);
+  border-radius: 10px;
+  outline: none;
+  background: #fff;
+  color: var(--ink);
+}
+.time-picker select:focus { border-color: var(--accent-strong); }
+.time-colon {
+  flex: 0 0 auto;
+  color: var(--muted);
+  font-weight: 700;
+}
+
 .form-row {
   display: grid;
   grid-template-columns: 1fr 1fr;

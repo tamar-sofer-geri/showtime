@@ -320,6 +320,61 @@
   const filePreviewName = document.getElementById("file-preview-name");
   const fileRemoveBtn = document.getElementById("file-remove-btn");
 
+  // ---- Time picker (custom hour/minute/AM-PM selects, not the native
+  // <input type="time"> widget — some mobile browsers render that dialog
+  // without a working confirm button, silently discarding the value) ----
+
+  const timeInput = document.getElementById("time-input");
+  const timeHourSelect = document.getElementById("time-hour");
+  const timeMinuteSelect = document.getElementById("time-minute");
+  const timeAmPmSelect = document.getElementById("time-ampm");
+
+  {
+    const placeholder = document.createElement("option");
+    placeholder.value = "";
+    placeholder.textContent = "--";
+    timeMinuteSelect.appendChild(placeholder);
+  }
+  for (let m = 0; m < 60; m++) {
+    const opt = document.createElement("option");
+    opt.value = String(m).padStart(2, "0");
+    opt.textContent = opt.value;
+    timeMinuteSelect.appendChild(opt);
+  }
+
+  function syncHiddenTime() {
+    const h = timeHourSelect.value;
+    const m = timeMinuteSelect.value;
+    const ap = timeAmPmSelect.value;
+    if (!h || !m || !ap) {
+      timeInput.value = "";
+      return;
+    }
+    let hh = parseInt(h, 10);
+    if (ap === "PM" && hh !== 12) hh += 12;
+    if (ap === "AM" && hh === 12) hh = 0;
+    timeInput.value = `${String(hh).padStart(2, "0")}:${m}`;
+  }
+
+  function setTimeSelects(value) {
+    if (!value) {
+      timeHourSelect.value = "";
+      timeMinuteSelect.value = "";
+      timeAmPmSelect.value = "";
+      syncHiddenTime();
+      return;
+    }
+    const [hh, mm] = value.split(":").map(Number);
+    let h12 = hh % 12;
+    if (h12 === 0) h12 = 12;
+    timeHourSelect.value = String(h12);
+    timeMinuteSelect.value = String(mm).padStart(2, "0");
+    timeAmPmSelect.value = hh >= 12 ? "PM" : "AM";
+    syncHiddenTime();
+  }
+
+  [timeHourSelect, timeMinuteSelect, timeAmPmSelect].forEach((sel) => sel.addEventListener("change", syncHiddenTime));
+
   function openAddModal(prefill) {
     editingId = null;
     pendingFile = undefined;
@@ -327,12 +382,13 @@
     deleteBtn.hidden = true;
     ticketForm.reset();
     clearFilePreview();
+    setTimeSelects("");
 
     if (prefill) {
       ticketForm.eventName.value = prefill.eventName || "";
       ticketForm.venue.value = prefill.venue || "";
       ticketForm.date.value = prefill.date || "";
-      ticketForm.time.value = prefill.time || "";
+      setTimeSelects(prefill.time || "");
       ticketForm.price.value = prefill.price || "";
       ticketForm.source.value = prefill.source || "";
       ticketForm.confirmation.value = prefill.confirmation || "";
@@ -357,7 +413,7 @@
     ticketForm.eventName.value = t.eventName || "";
     ticketForm.venue.value = t.venue || "";
     ticketForm.date.value = t.date || "";
-    ticketForm.time.value = t.time || "";
+    setTimeSelects(t.time || "");
     ticketForm.price.value = t.price ?? "";
     ticketForm.seat.value = t.seat || "";
     ticketForm.source.value = t.source || "";
@@ -414,6 +470,7 @@
 
   ticketForm.addEventListener("submit", async (e) => {
     e.preventDefault();
+    syncHiddenTime();
     const fd = new FormData(ticketForm);
     const existing = editingId ? tickets.find((x) => x.id === editingId) : null;
 
