@@ -143,7 +143,8 @@
     const confMatch = combined.match(/\b(?:confirmation|order)\s*(?:#|number|no\.?|num)?\s*[:#]?\s*((?=[a-z0-9-]*\d)[a-z0-9-]{4,})/i);
     if (confMatch) result.confirmation = confMatch[1];
 
-    const totalMatch = combined.match(/total[^$\n]{0,20}\$\s?([\d,]+\.\d{2})/i);
+    // Eventbrite writes totals as "Order total: 180.00 USD" — no $ sign.
+    const totalMatch = combined.match(/total\s*:?\s*\$?\s*([\d,]+\.\d{2})/i);
     const anyPriceMatch = combined.match(/\$\s?([\d,]+\.\d{2})/);
     const priceMatch = totalMatch || anyPriceMatch;
     if (priceMatch) result.price = priceMatch[1].replace(/,/g, "");
@@ -180,12 +181,13 @@
       result.time = `${String(h).padStart(2, "0")}:${timeMatch[2]}`;
     }
 
-    // Eventbrite (and similar) subjects read "Order confirmation for <event>" —
-    // pull the event name straight out of that, in preference to the generic
+    // Eventbrite phrases this as "Your Tickets for <event>" or "Order
+    // confirmation for <event>" depending on the email — pull the event name
+    // straight out of whichever appears, in preference to the generic
     // title-based guess below.
-    const confirmationForMatch = combined.match(/\b(?:order )?confirmation for\s+([^\n\r]+)/i);
-    if (confirmationForMatch) {
-      result.eventName = confirmationForMatch[1].trim().replace(/[.!]+$/, "");
+    const eventForMatch = combined.match(/\b(?:your\s+)?(?:tickets|order confirmation|confirmation) for\s+([^\n\r]+)/i);
+    if (eventForMatch) {
+      result.eventName = eventForMatch[1].trim().replace(/[.!]+$/, "");
     }
 
     if (!result.eventName) {
