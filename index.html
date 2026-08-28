@@ -118,15 +118,15 @@
     </div>
   </div>
 
-  <!-- Shown when an incoming share includes a file: new ticket, or attach to an existing one? -->
+  <!-- Shown for every incoming share (once at least one ticket exists): new ticket, or add to an existing one? -->
   <div id="share-choice-modal" class="modal" hidden>
     <div class="modal-backdrop" data-share-choice-close></div>
     <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="share-choice-title">
-      <h2 id="share-choice-title">Attach this file</h2>
+      <h2 id="share-choice-title">New or existing ticket?</h2>
       <div id="share-choice-preview" class="file-preview file-preview-static"></div>
-      <p class="modal-hint">Is this for a new ticket, or should it attach to a ticket you already saved?</p>
+      <p class="modal-hint">Is this for a new ticket, or does it belong with one you already saved?</p>
       <div class="modal-actions modal-actions-stacked">
-        <button type="button" id="share-choice-existing-btn" class="btn btn-primary">Attach to existing ticket</button>
+        <button type="button" id="share-choice-existing-btn" class="btn btn-primary">Add to existing ticket</button>
         <button type="button" id="share-choice-new-btn" class="btn btn-ghost-outline">Create new ticket</button>
       </div>
     </div>
@@ -154,6 +154,6 @@
     </div>
   </div>
 
-  <script src="app.js?v=10"></script>
+  <script src="app.js?v=11"></script>
 </body>
 </html>

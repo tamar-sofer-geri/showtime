@@ -685,15 +685,20 @@
     pendingShare = { parsed, fileBlob: share.fileBlob, fileType: share.fileType, fileName: share.fileName };
 
     shareChoicePreview.innerHTML = "";
-    if (share.fileType && share.fileType.startsWith("image/")) {
+    if (share.fileBlob && share.fileType && share.fileType.startsWith("image/")) {
       const img = document.createElement("img");
       img.alt = "";
       img.src = trackUrl(URL.createObjectURL(share.fileBlob));
       shareChoicePreview.appendChild(img);
+    } else if (share.fileBlob) {
+      const icon = document.createElement("div");
+      icon.className = "file-list-icon";
+      icon.textContent = "📄";
+      shareChoicePreview.appendChild(icon);
     }
     const name = document.createElement("span");
     name.className = "file-preview-name";
-    name.textContent = share.fileName || "Attachment";
+    name.textContent = share.fileName || parsed.eventName || "Shared info";
     shareChoicePreview.appendChild(name);
 
     shareChoiceModal.hidden = false;
@@ -769,11 +774,11 @@
   function openPickerModal() {
     const sorted = [...tickets].sort((a, b) => ticketDateTime(b) - ticketDateTime(a));
     openListPicker(
-      "Attach to which ticket?",
+      "Add to which ticket?",
       sorted.map((t) => ({
         primary: t.eventName,
         secondary: formatDate(t.date),
-        onSelect: () => attachSharedFileToTicket(t.id),
+        onSelect: () => applySharedContentToTicket(t.id),
       }))
     );
   }
@@ -788,13 +793,33 @@
     );
   }
 
-  function attachSharedFileToTicket(ticketId) {
+  // Opens an existing ticket's Edit form, then layers the shared content on
+  // top: any file gets appended (never replaces existing attachments), and
+  // parsed text fields fill in only fields the ticket doesn't already have a
+  // value for — so a second, less-detailed share can't clobber what a first
+  // one already got right.
+  function applySharedContentToTicket(ticketId) {
     const share = pendingShare;
     pendingShare = null;
     if (!share) return;
-    openEditModal(ticketId); // sets workingFiles to a copy of the ticket's existing files
-    workingFiles.push({ blob: share.fileBlob, name: share.fileName, type: share.fileType });
-    renderFileList();
+    openEditModal(ticketId);
+
+    const parsed = share.parsed || {};
+    const fillIfEmpty = (input, value) => {
+      if (value && !input.value.trim()) input.value = value;
+    };
+    fillIfEmpty(ticketForm.venue, parsed.venue);
+    if (parsed.date && !ticketForm.date.value) ticketForm.date.value = parsed.date;
+    if (parsed.time && !timeInput.value) setTimeSelects(parsed.time);
+    fillIfEmpty(ticketForm.price, parsed.price);
+    fillIfEmpty(ticketForm.seat, parsed.seat);
+    fillIfEmpty(ticketForm.source, parsed.source);
+    fillIfEmpty(ticketForm.confirmation, parsed.confirmation);
+
+    if (share.fileBlob) {
+      workingFiles.push({ blob: share.fileBlob, name: share.fileName, type: share.fileType });
+      renderFileList();
+    }
   }
 
   // ---- Load ----
@@ -814,7 +839,7 @@
 
     const parsed = parseSharedText(share.title, share.text || share.url);
 
-    if (share.fileBlob && tickets.length > 0) {
+    if (tickets.length > 0) {
       openShareChoiceModal(parsed, share);
     } else {
       openAddModal({ ...parsed, fileBlob: share.fileBlob, fileType: share.fileType, fileName: share.fileName });
