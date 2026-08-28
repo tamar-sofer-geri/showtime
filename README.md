@@ -7,9 +7,9 @@ Two tabs, switched via the bottom bar:
 - **Upcoming** — sorted soonest first, with a countdown badge (Today! / Tomorrow / In N days). Shows within 7 days get a highlighted orange card as an in-app reminder.
 - **Past** — sorted most recent first.
 
-Tap **+** to add a ticket: show/event name, venue, date & time (24-hour, quarter-hour increments), price paid, seat/section, where you bought it, confirmation number, and an optional photo/PDF of the actual ticket (which typically has the barcode on it already). On a ticket card: a short tap opens **Edit**; press and hold opens the attached ticket photo/PDF directly, without going through Edit first.
+Tap **+** to add a ticket: show/event name, venue, date & time (24-hour, quarter-hour increments), price paid, seat/section, where you bought it, confirmation number, and any number of photos/PDFs of the actual tickets (useful when an order has multiple physical tickets, each with its own QR code — attach them all to the one event). On a ticket card: a short tap opens **Edit**; press and hold opens the attached file directly (or, with more than one attached, a small picker to choose which), without going through Edit first.
 
-All data — including the attached ticket photo/PDF — is stored locally on-device in IndexedDB. Nothing leaves the device; there's no backend or sync (yet).
+All data — including attached photos/PDFs — is stored locally on-device in IndexedDB. Nothing leaves the device; there's no backend or sync (yet).
 
 ## Reminders
 
@@ -26,7 +26,7 @@ Once installed to the home screen (Android/Chrome), Showtime registers as an OS 
 
 This is heuristic, not OCR/AI — it looks for patterns like `$123.45`, `September 12, 2026`, `7:30 PM`, an explicit `Event` label line, phrases like "confirmation for <event>", known vendor names (Ticketmaster, StubHub, SeatGeek, Eventbrite, etc.), an order/confirmation number, a `City, ST ZIP` line (to infer venue), and `Section X, Row Y, Seat Z` lines. It's been tuned against real Ticketmaster and Eventbrite emails but won't be perfect for every vendor's format — everything is still editable/skippable before saving.
 
-**Attaching a ticket's QR code separately:** many apps' native ticket screens (e.g. the Eventbrite app) aren't regular web text, so sharing from there carries the image but little to no usable text. The email, by contrast, has selectable text but no image. To get both on one ticket: share the confirmation email first (creates the ticket with full details), then take a plain OS screenshot of the QR code screen and share *that* to Showtime — since a ticket already exists, you'll be offered "Attach to existing ticket" instead of creating a duplicate.
+**Attaching a ticket's QR code separately:** many apps' native ticket screens (e.g. the Eventbrite app) aren't regular web text, so sharing from there carries the image but little to no usable text. The email, by contrast, has selectable text but no image. To get both on one ticket: share the confirmation email first (creates the ticket with full details), then take a plain OS screenshot of each QR code screen and share those to Showtime — since a ticket already exists, you'll be offered "Attach to existing ticket" instead of creating a duplicate. This also covers orders with multiple physical tickets (e.g. Eventbrite only lets you share one at a time): attach each one to the same ticket in turn, rather than ending up with a separate Showtime entry per ticket.
 
 **Caveats:**
 - Share targets are an Android/Chrome (and Chromium browsers) feature — iOS Safari doesn't support the Web Share Target API, so this won't appear in iOS's share sheet.

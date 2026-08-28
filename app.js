@@ -245,7 +245,7 @@
   let tickets = [];
   let currentView = "upcoming";
   let editingId = null;
-  let pendingFile = null; // { blob, name, type } | null | undefined (undefined = unchanged)
+  let workingFiles = []; // [{ blob, name, type }] — the modal's current attachment list while open
   const objectUrls = [];
 
   function trackUrl(url) {
@@ -255,6 +255,15 @@
 
   function revokeTrackedUrls() {
     while (objectUrls.length) URL.revokeObjectURL(objectUrls.pop());
+  }
+
+  // Older records stored a single fileBlob/fileType/fileName; newer ones
+  // store a `files` array. Normalize so the rest of the app only deals
+  // with arrays.
+  function getTicketFiles(t) {
+    if (t.files && t.files.length) return t.files;
+    if (t.fileBlob) return [{ blob: t.fileBlob, type: t.fileType, name: t.fileName }];
+    return [];
   }
 
   // ---- Rendering ----
@@ -290,18 +299,28 @@
     card.tabIndex = 0;
     wireCardPress(card, t);
 
-    if (t.fileBlob && t.fileType && t.fileType.startsWith("image/")) {
+    const files = getTicketFiles(t);
+    const thumbWrap = document.createElement("div");
+    thumbWrap.className = "ticket-thumb-wrap";
+    if (files[0] && files[0].type && files[0].type.startsWith("image/")) {
       const img = document.createElement("img");
       img.className = "ticket-thumb";
       img.alt = "";
-      img.src = trackUrl(URL.createObjectURL(t.fileBlob));
-      card.appendChild(img);
+      img.src = trackUrl(URL.createObjectURL(files[0].blob));
+      thumbWrap.appendChild(img);
     } else {
       const ph = document.createElement("div");
       ph.className = "ticket-thumb-placeholder";
-      ph.textContent = t.fileBlob ? "📄" : "🎫";
-      card.appendChild(ph);
+      ph.textContent = files.length ? "📄" : "🎫";
+      thumbWrap.appendChild(ph);
     }
+    if (files.length > 1) {
+      const countBadge = document.createElement("span");
+      countBadge.className = "ticket-thumb-count";
+      countBadge.textContent = String(files.length);
+      thumbWrap.appendChild(countBadge);
+    }
+    card.appendChild(thumbWrap);
 
     const info = document.createElement("div");
     info.className = "ticket-info";
@@ -389,9 +408,18 @@
   }
 
   function openAttachmentForTicket(t) {
-    if (!t.fileBlob) return;
-    const kind = t.fileType && t.fileType.startsWith("image/") ? "image" : "pdf";
-    openAttachment(trackUrl(URL.createObjectURL(t.fileBlob)), kind);
+    const files = getTicketFiles(t);
+    if (!files.length) return;
+    if (files.length === 1) {
+      viewFile(files[0]);
+      return;
+    }
+    openFilePicker(files);
+  }
+
+  function viewFile(f) {
+    const kind = f.type && f.type.startsWith("image/") ? "image" : "pdf";
+    openAttachment(trackUrl(URL.createObjectURL(f.blob)), kind);
   }
 
   // ---- Tabs ----
@@ -417,10 +445,7 @@
   const ticketForm = document.getElementById("ticket-form");
   const deleteBtn = document.getElementById("ticket-delete-btn");
   const fileInput = document.getElementById("file-input");
-  const filePreview = document.getElementById("file-preview");
-  const filePreviewImg = document.getElementById("file-preview-img");
-  const filePreviewName = document.getElementById("file-preview-name");
-  const fileRemoveBtn = document.getElementById("file-remove-btn");
+  const fileListEl = document.getElementById("file-list");
 
   // ---- Time picker (custom hour/minute/AM-PM selects, not the native
   // <input type="time"> widget — some mobile browsers render that dialog
@@ -486,11 +511,10 @@
 
   function openAddModal(prefill) {
     editingId = null;
-    pendingFile = undefined;
+    workingFiles = [];
     ticketModalTitle.textContent = "Add ticket";
     deleteBtn.hidden = true;
     ticketForm.reset();
-    clearFilePreview();
     setTimeSelects("");
 
     if (prefill) {
@@ -503,11 +527,11 @@
       ticketForm.source.value = prefill.source || "";
       ticketForm.confirmation.value = prefill.confirmation || "";
       if (prefill.fileBlob) {
-        pendingFile = { blob: prefill.fileBlob, name: prefill.fileName, type: prefill.fileType };
-        showFilePreview(prefill.fileBlob, prefill.fileType, prefill.fileName);
+        workingFiles.push({ blob: prefill.fileBlob, name: prefill.fileName, type: prefill.fileType });
       }
     }
 
+    renderFileList();
     ticketModal.hidden = false;
     document.getElementById("event-input").focus();
   }
@@ -516,7 +540,7 @@
     const t = tickets.find((x) => x.id === id);
     if (!t) return;
     editingId = id;
-    pendingFile = undefined;
+    workingFiles = getTicketFiles(t).slice();
     ticketModalTitle.textContent = "Edit ticket";
     deleteBtn.hidden = false;
     ticketForm.reset();
@@ -528,50 +552,62 @@
     ticketForm.seat.value = t.seat || "";
     ticketForm.source.value = t.source || "";
     ticketForm.confirmation.value = t.confirmation || "";
-    if (t.fileBlob) {
-      showFilePreview(t.fileBlob, t.fileType, t.fileName);
-    } else {
-      clearFilePreview();
-    }
+    renderFileList();
     ticketModal.hidden = false;
   }
 
   function closeTicketModal() {
     ticketModal.hidden = true;
     editingId = null;
-    pendingFile = undefined;
+    workingFiles = [];
   }
 
-  function clearFilePreview() {
-    filePreview.hidden = true;
-    filePreviewImg.hidden = true;
-    filePreviewImg.src = "";
-    filePreviewName.textContent = "";
-  }
+  function renderFileList() {
+    fileListEl.innerHTML = "";
+    workingFiles.forEach((f, i) => {
+      const row = document.createElement("li");
+      row.className = "file-preview";
 
-  function showFilePreview(blob, type, name) {
-    filePreview.hidden = false;
-    if (type && type.startsWith("image/")) {
-      filePreviewImg.hidden = false;
-      filePreviewImg.src = trackUrl(URL.createObjectURL(blob));
-    } else {
-      filePreviewImg.hidden = true;
-      filePreviewImg.src = "";
-    }
-    filePreviewName.textContent = name || "Attachment";
+      let thumb;
+      if (f.type && f.type.startsWith("image/")) {
+        thumb = document.createElement("img");
+        thumb.alt = "";
+        thumb.src = trackUrl(URL.createObjectURL(f.blob));
+      } else {
+        thumb = document.createElement("div");
+        thumb.className = "file-list-icon";
+        thumb.textContent = "📄";
+      }
+      thumb.addEventListener("click", () => viewFile(f));
+      row.appendChild(thumb);
+
+      const name = document.createElement("span");
+      name.className = "file-preview-name file-list-name";
+      name.textContent = f.name || "Attachment";
+      name.addEventListener("click", () => viewFile(f));
+      row.appendChild(name);
+
+      const removeBtn = document.createElement("button");
+      removeBtn.type = "button";
+      removeBtn.className = "file-remove-btn";
+      removeBtn.setAttribute("aria-label", "Remove attachment");
+      removeBtn.textContent = "×";
+      removeBtn.addEventListener("click", () => {
+        workingFiles.splice(i, 1);
+        renderFileList();
+      });
+      row.appendChild(removeBtn);
+
+      fileListEl.appendChild(row);
+    });
   }
 
   fileInput.addEventListener("change", () => {
-    const f = fileInput.files[0];
-    if (!f) return;
-    pendingFile = { blob: f, name: f.name, type: f.type };
-    showFilePreview(f, f.type, f.name);
-  });
-
-  fileRemoveBtn.addEventListener("click", () => {
-    pendingFile = null;
+    for (const f of fileInput.files) {
+      workingFiles.push({ blob: f, name: f.name, type: f.type });
+    }
     fileInput.value = "";
-    clearFilePreview();
+    renderFileList();
   });
 
   document.getElementById("header-add-btn").addEventListener("click", openAddModal);
@@ -582,7 +618,6 @@
     e.preventDefault();
     syncHiddenTime();
     const fd = new FormData(ticketForm);
-    const existing = editingId ? tickets.find((x) => x.id === editingId) : null;
 
     const ticket = {
       id: editingId || crypto.randomUUID(),
@@ -594,20 +629,8 @@
       seat: fd.get("seat").trim(),
       source: fd.get("source").trim(),
       confirmation: fd.get("confirmation").trim(),
-      fileBlob: existing ? existing.fileBlob : null,
-      fileType: existing ? existing.fileType : null,
-      fileName: existing ? existing.fileName : null,
+      files: workingFiles.map((f) => ({ blob: f.blob, type: f.type, name: f.name })),
     };
-
-    if (pendingFile === null) {
-      ticket.fileBlob = null;
-      ticket.fileType = null;
-      ticket.fileName = null;
-    } else if (pendingFile) {
-      ticket.fileBlob = pendingFile.blob;
-      ticket.fileType = pendingFile.type;
-      ticket.fileName = pendingFile.name;
-    }
 
     await putTicket(ticket);
     await reload();
@@ -622,22 +645,11 @@
     closeTicketModal();
   });
 
-  // ---- Attachment viewer (tap thumbnail from edit modal preview) ----
+  // ---- Attachment viewer ----
 
   const attachmentModal = document.getElementById("attachment-modal");
   const attachmentImg = document.getElementById("attachment-img");
   const attachmentLink = document.getElementById("attachment-link");
-
-  filePreviewImg.addEventListener("click", () => {
-    if (!filePreviewImg.src) return;
-    openAttachment(filePreviewImg.src, "image");
-  });
-  filePreviewName.addEventListener("click", () => {
-    const t = editingId ? tickets.find((x) => x.id === editingId) : null;
-    if (t && t.fileBlob && t.fileType === "application/pdf") {
-      openAttachment(trackUrl(URL.createObjectURL(t.fileBlob)), "pdf");
-    }
-  });
 
   function openAttachment(url, kind) {
     if (kind === "image") {
@@ -711,28 +723,31 @@
     openPickerModal();
   });
 
-  function openPickerModal() {
-    const sorted = [...tickets].sort((a, b) => ticketDateTime(b) - ticketDateTime(a));
+  // Generic tappable-list modal, reused for "which ticket?" and "which file?".
+  function openListPicker(title, items) {
+    document.getElementById("picker-title").textContent = title;
     pickerList.innerHTML = "";
-    for (const t of sorted) {
+    for (const item of items) {
       const li = document.createElement("li");
       const row = document.createElement("button");
       row.type = "button";
       row.className = "picker-row";
       row.addEventListener("click", () => {
         closePickerModal();
-        attachSharedFileToTicket(t.id);
+        item.onSelect();
       });
 
-      const name = document.createElement("span");
-      name.className = "picker-row-name";
-      name.textContent = t.eventName;
-      row.appendChild(name);
+      const primary = document.createElement("span");
+      primary.className = "picker-row-name";
+      primary.textContent = item.primary;
+      row.appendChild(primary);
 
-      const date = document.createElement("span");
-      date.className = "picker-row-date";
-      date.textContent = formatDate(t.date);
-      row.appendChild(date);
+      if (item.secondary) {
+        const secondary = document.createElement("span");
+        secondary.className = "picker-row-date";
+        secondary.textContent = item.secondary;
+        row.appendChild(secondary);
+      }
 
       li.appendChild(row);
       pickerList.appendChild(li);
@@ -751,13 +766,35 @@
     })
   );
 
+  function openPickerModal() {
+    const sorted = [...tickets].sort((a, b) => ticketDateTime(b) - ticketDateTime(a));
+    openListPicker(
+      "Attach to which ticket?",
+      sorted.map((t) => ({
+        primary: t.eventName,
+        secondary: formatDate(t.date),
+        onSelect: () => attachSharedFileToTicket(t.id),
+      }))
+    );
+  }
+
+  function openFilePicker(files) {
+    openListPicker(
+      "View which file?",
+      files.map((f, i) => ({
+        primary: f.name || `Attachment ${i + 1}`,
+        onSelect: () => viewFile(f),
+      }))
+    );
+  }
+
   function attachSharedFileToTicket(ticketId) {
     const share = pendingShare;
     pendingShare = null;
     if (!share) return;
-    openEditModal(ticketId);
-    pendingFile = { blob: share.fileBlob, name: share.fileName, type: share.fileType };
-    showFilePreview(share.fileBlob, share.fileType, share.fileName);
+    openEditModal(ticketId); // sets workingFiles to a copy of the ticket's existing files
+    workingFiles.push({ blob: share.fileBlob, name: share.fileName, type: share.fileType });
+    renderFileList();
   }
 
   // ---- Load ----

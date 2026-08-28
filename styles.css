@@ -110,16 +110,19 @@ html, body {
   background: var(--soon-bg);
 }
 
-.ticket-thumb {
+.ticket-thumb-wrap {
+  position: relative;
   flex: 0 0 auto;
+}
+.ticket-thumb {
   width: 46px;
   height: 46px;
   border-radius: 10px;
   object-fit: cover;
   background: var(--line);
+  display: block;
 }
 .ticket-thumb-placeholder {
-  flex: 0 0 auto;
   width: 46px;
   height: 46px;
   border-radius: 10px;
@@ -129,6 +132,24 @@ html, body {
   align-items: center;
   justify-content: center;
   font-size: 20px;
+}
+.ticket-thumb-count {
+  position: absolute;
+  bottom: -4px;
+  right: -4px;
+  background: var(--accent-strong);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+  border-radius: 999px;
+  min-width: 16px;
+  height: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 3px;
+  box-shadow: 0 0 0 2px var(--card);
 }
 
 .ticket-info {
@@ -353,6 +374,33 @@ html, body {
   cursor: pointer;
   padding: 0 4px;
 }
+
+.file-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.file-list .file-preview { margin-top: 0; }
+.file-list img,
+.file-list .file-list-icon {
+  cursor: pointer;
+}
+.file-list-icon {
+  flex: 0 0 auto;
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
+  background: var(--accent);
+  color: var(--accent-ink);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+}
+.file-list-name { cursor: pointer; }
 
 .modal-actions {
   display: flex;
