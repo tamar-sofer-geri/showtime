@@ -1,0 +1,13 @@
+{
+  "name": "Showtime",
+  "short_name": "Showtime",
+  "description": "Track tickets you've bought and get reminded before the show",
+  "start_url": ".",
+  "display": "standalone",
+  "background_color": "#f7f5fb",
+  "theme_color": "#6d28d9",
+  "icons": [
+    { "src": "icon.svg?v=1", "type": "image/svg+xml", "sizes": "any", "purpose": "any" },
+    { "src": "apple-touch-icon.png?v=1", "type": "image/png", "sizes": "180x180" }
+  ]
+}

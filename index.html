@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#6d28d9" />
+  <!-- Add-to-home-screen support -->
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="apple-mobile-web-app-title" content="Showtime" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;800&display=swap" rel="stylesheet" />
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="apple-touch-icon" href="apple-touch-icon.png?v=1" />
+  <link rel="icon" href="icon.svg?v=1" type="image/svg+xml" />
+  <title>Showtime</title>
+  <link rel="stylesheet" href="styles.css?v=1" />
+</head>
+<body>
+  <div class="app">
+    <header class="app-header">
+      <img class="brand-logo" src="icon.svg?v=1" alt="" width="40" height="40" />
+      <h1 class="brand-title"><span class="brand-title-thin">Show</span><span class="brand-title-bold">time</span></h1>
+      <button id="header-add-btn" class="header-add-btn" type="button" aria-label="Add ticket">+</button>
+    </header>
+
+    <main>
+      <!-- Upcoming view -->
+      <section id="view-upcoming" class="view" aria-label="Upcoming">
+        <ul id="list-upcoming" class="ticket-list" aria-live="polite"></ul>
+        <p id="empty-upcoming" class="empty-state" hidden>No upcoming shows yet. Tap + to add a ticket.</p>
+      </section>
+
+      <!-- Past view -->
+      <section id="view-past" class="view" aria-label="Past" hidden>
+        <ul id="list-past" class="ticket-list" aria-live="polite"></ul>
+        <p id="empty-past" class="empty-state" hidden>No past shows yet.</p>
+      </section>
+    </main>
+  </div>
+
+  <!-- Bottom tab navigation -->
+  <nav class="tabbar" aria-label="Views">
+    <button class="tab is-active" type="button" data-view="upcoming" aria-current="page">
+      <span class="tab-icon" aria-hidden="true">🎟️</span>
+      <span>Upcoming</span>
+    </button>
+    <button class="tab" type="button" data-view="past">
+      <span class="tab-icon" aria-hidden="true">🕓</span>
+      <span>Past</span>
+    </button>
+  </nav>
+
+  <!-- Add/Edit ticket modal -->
+  <div id="ticket-modal" class="modal" hidden>
+    <div class="modal-backdrop" data-close></div>
+    <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="ticket-modal-title">
+      <h2 id="ticket-modal-title">Add ticket</h2>
+      <form id="ticket-form">
+        <label for="event-input">Show / event name</label>
+        <input id="event-input" name="eventName" type="text" autocomplete="off" placeholder="e.g. Radiohead" required />
+
+        <label for="venue-input">Venue</label>
+        <input id="venue-input" name="venue" type="text" autocomplete="off" placeholder="e.g. Madison Square Garden" />
+
+        <div class="form-row">
+          <div>
+            <label for="date-input">Date</label>
+            <input id="date-input" name="date" type="date" required />
+          </div>
+          <div>
+            <label for="time-input">Time</label>
+            <input id="time-input" name="time" type="time" />
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div>
+            <label for="price-input">Price paid</label>
+            <input id="price-input" name="price" type="number" inputmode="decimal" min="0" step="0.01" placeholder="0.00" />
+          </div>
+          <div>
+            <label for="seat-input">Seat / section</label>
+            <input id="seat-input" name="seat" type="text" autocomplete="off" placeholder="e.g. Sec 12, Row F" />
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div>
+            <label for="source-input">Purchased from</label>
+            <input id="source-input" name="source" type="text" autocomplete="off" placeholder="e.g. Ticketmaster" />
+          </div>
+          <div>
+            <label for="confirmation-input">Confirmation #</label>
+            <input id="confirmation-input" name="confirmation" type="text" autocomplete="off" />
+          </div>
+        </div>
+
+        <label for="file-input">Ticket photo / PDF / barcode</label>
+        <input id="file-input" name="file" type="file" accept="image/*,application/pdf" />
+        <div id="file-preview" class="file-preview" hidden>
+          <img id="file-preview-img" alt="" hidden />
+          <span id="file-preview-name" class="file-preview-name"></span>
+          <button type="button" id="file-remove-btn" class="file-remove-btn" aria-label="Remove attachment">&times;</button>
+        </div>
+
+        <div class="modal-actions modal-actions-split">
+          <button type="button" id="ticket-delete-btn" class="btn btn-danger" hidden>Delete</button>
+          <div class="modal-actions-right">
+            <button type="button" class="btn btn-ghost" data-close>Cancel</button>
+            <button type="submit" class="btn btn-primary">Save</button>
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Full-size attachment viewer -->
+  <div id="attachment-modal" class="modal" hidden>
+    <div class="modal-backdrop" data-attachment-close></div>
+    <div class="attachment-card">
+      <button type="button" class="attachment-close-btn" data-attachment-close aria-label="Close">&times;</button>
+      <img id="attachment-img" alt="Ticket attachment" hidden />
+      <a id="attachment-link" class="btn btn-primary" target="_blank" rel="noopener" hidden>Open PDF</a>
+    </div>
+  </div>
+
+  <script src="app.js?v=1"></script>
+</body>
+</html>
