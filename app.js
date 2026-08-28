@@ -129,7 +129,7 @@
 
   function parseSharedText(title, text) {
     const combined = [title, text].filter(Boolean).join("\n");
-    const result = { eventName: "", venue: "", date: "", time: "", price: "", source: "", confirmation: "" };
+    const result = { eventName: "", venue: "", date: "", time: "", price: "", seat: "", source: "", confirmation: "" };
 
     for (const vendor of KNOWN_VENDORS) {
       if (combined.toLowerCase().includes(vendor.toLowerCase())) {
@@ -188,6 +188,34 @@
     const eventForMatch = combined.match(/\b(?:your\s+)?(?:tickets|order confirmation|confirmation) for\s+([^\n\r]+)/i);
     if (eventForMatch) {
       result.eventName = eventForMatch[1].trim().replace(/[.!]+$/, "");
+    }
+
+    // Venue: Eventbrite prints "Venue Name" / street / "City, ST ZIP" /
+    // "View on map" as consecutive lines — find the city/state/zip line and
+    // walk back two lines to the venue name.
+    const rawLines = combined.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+    const cityZipIndex = rawLines.findIndex((l) => /^[^,\n]+,\s*[A-Z]{2}\s+\d{5}/.test(l));
+    if (cityZipIndex >= 2) {
+      const streetLine = rawLines[cityZipIndex - 1];
+      const venueLine = rawLines[cityZipIndex - 2];
+      if (/^\d/.test(streetLine) && venueLine.length <= 60 && !/^(view|section|order|ticket)/i.test(venueLine)) {
+        result.venue = venueLine;
+      }
+    }
+
+    // Seats: Eventbrite lists "Section X, Row Y, Seat Z" once per physical
+    // ticket. Group identical section/row together into one "Seats 10, 11".
+    const seatMatches = [...combined.matchAll(/Section\s+([\w-]+),?\s*Row\s+([\w-]+),?\s*Seat\s+([\w-]+)/gi)];
+    if (seatMatches.length) {
+      const groups = new Map();
+      for (const [, section, row, seat] of seatMatches) {
+        const key = `${section}|${row}`;
+        if (!groups.has(key)) groups.set(key, { section, row, seats: [] });
+        groups.get(key).seats.push(seat);
+      }
+      result.seat = [...groups.values()]
+        .map((g) => `Section ${g.section}, Row ${g.row}, Seat${g.seats.length > 1 ? "s" : ""} ${g.seats.join(", ")}`)
+        .join("; ");
     }
 
     if (!result.eventName) {
@@ -459,6 +487,7 @@
       ticketForm.date.value = prefill.date || "";
       setTimeSelects(prefill.time || "");
       ticketForm.price.value = prefill.price || "";
+      ticketForm.seat.value = prefill.seat || "";
       ticketForm.source.value = prefill.source || "";
       ticketForm.confirmation.value = prefill.confirmation || "";
       if (prefill.fileBlob) {
