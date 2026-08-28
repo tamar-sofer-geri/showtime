@@ -130,6 +130,7 @@
   function parseSharedText(title, text) {
     const combined = [title, text].filter(Boolean).join("\n");
     const result = { eventName: "", venue: "", date: "", time: "", price: "", seat: "", source: "", confirmation: "" };
+    const rawLines = combined.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
 
     for (const vendor of KNOWN_VENDORS) {
       if (combined.toLowerCase().includes(vendor.toLowerCase())) {
@@ -181,19 +182,29 @@
       result.time = `${String(h).padStart(2, "0")}:${timeMatch[2]}`;
     }
 
-    // Eventbrite phrases this as "Your Tickets for <event>" or "Order
-    // confirmation for <event>" depending on the email — pull the event name
-    // straight out of whichever appears, in preference to the generic
-    // title-based guess below.
-    const eventForMatch = combined.match(/\b(?:your\s+)?(?:tickets|order confirmation|confirmation) for\s+([^\n\r]+)/i);
-    if (eventForMatch) {
-      result.eventName = eventForMatch[1].trim().replace(/[.!]+$/, "");
+    // Ticket-detail blocks (Eventbrite among others) often print a literal
+    // "Event" label with the name on the next line — the single most
+    // reliable signal when it's there, so it wins over everything else.
+    const eventLabelIndex = rawLines.findIndex((l) => /^event:?$/i.test(l));
+    if (eventLabelIndex >= 0 && eventLabelIndex + 1 < rawLines.length) {
+      const nameLine = rawLines[eventLabelIndex + 1];
+      if (nameLine.length <= 80) result.eventName = nameLine;
+    }
+
+    // Otherwise look for it embedded in a sentence: "Your Tickets for
+    // <event>", "Order confirmation for <event>", "registration for
+    // <event> on <date>", etc. — stop at whichever comes first: a date
+    // ("on November 9"), "has been", sentence punctuation, or line end.
+    if (!result.eventName) {
+      const eventForMatch = combined.match(
+        /\b(?:your\s+)?(?:tickets|order confirmation|confirmation|registration) for\s+(?:the\s+)?([^\n\r]+?)(?=\s+on\s+[A-Z][a-z]+\s+\d|\s+has\s+been|[.,]\s|[\n\r]|$)/i
+      );
+      if (eventForMatch) result.eventName = eventForMatch[1].trim();
     }
 
     // Venue: Eventbrite prints "Venue Name" / street / "City, ST ZIP" /
     // "View on map" as consecutive lines — find the city/state/zip line and
     // walk back two lines to the venue name.
-    const rawLines = combined.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
     const cityZipIndex = rawLines.findIndex((l) => /^[^,\n]+,\s*[A-Z]{2}\s+\d{5}/.test(l));
     if (cityZipIndex >= 2) {
       const streetLine = rawLines[cityZipIndex - 1];
@@ -220,7 +231,8 @@
 
     if (!result.eventName) {
       let candidate = (title || "").trim().replace(/^(fwd|fw|re)\s*:\s*/i, "");
-      if (candidate && !looksLikeFilename(candidate) && candidate.length <= 80) {
+      const looksLikeBoilerplate = /^(dear|hi|hello)\b/i.test(candidate) || /[{}]/.test(candidate);
+      if (candidate && !looksLikeFilename(candidate) && !looksLikeBoilerplate && candidate.length <= 80) {
         result.eventName = candidate;
       }
     }
