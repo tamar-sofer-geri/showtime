@@ -180,9 +180,19 @@
       result.time = `${String(h).padStart(2, "0")}:${timeMatch[2]}`;
     }
 
-    let candidate = (title || "").trim().replace(/^(fwd|fw|re)\s*:\s*/i, "");
-    if (candidate && !looksLikeFilename(candidate) && candidate.length <= 80) {
-      result.eventName = candidate;
+    // Eventbrite (and similar) subjects read "Order confirmation for <event>" —
+    // pull the event name straight out of that, in preference to the generic
+    // title-based guess below.
+    const confirmationForMatch = combined.match(/\b(?:order )?confirmation for\s+([^\n\r]+)/i);
+    if (confirmationForMatch) {
+      result.eventName = confirmationForMatch[1].trim().replace(/[.!]+$/, "");
+    }
+
+    if (!result.eventName) {
+      let candidate = (title || "").trim().replace(/^(fwd|fw|re)\s*:\s*/i, "");
+      if (candidate && !looksLikeFilename(candidate) && candidate.length <= 80) {
+        result.eventName = candidate;
+      }
     }
 
     return result;

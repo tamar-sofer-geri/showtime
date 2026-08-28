@@ -1,9 +1,9 @@
-const CACHE = "showtime-v5";
+const CACHE = "showtime-v6";
 const ASSETS = [
   "./",
   "index.html",
   "styles.css?v=4",
-  "app.js?v=4",
+  "app.js?v=5",
   "manifest.webmanifest",
   "icon.svg?v=2",
   "apple-touch-icon.png?v=2",
