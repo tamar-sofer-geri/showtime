@@ -1,9 +1,11 @@
 (() => {
   "use strict";
 
+  // Keep in sync with sw.js — both scripts open the same database.
   const DB_NAME = "showtime-db";
-  const DB_VERSION = 1;
-  const STORE = "tickets";
+  const DB_VERSION = 2;
+  const STORE_TICKETS = "tickets";
+  const STORE_SHARE = "pending-share";
 
   /** @returns {Promise<IDBDatabase>} */
   function openDB() {
@@ -11,8 +13,11 @@
       const req = indexedDB.open(DB_NAME, DB_VERSION);
       req.onupgradeneeded = () => {
         const db = req.result;
-        if (!db.objectStoreNames.contains(STORE)) {
-          db.createObjectStore(STORE, { keyPath: "id" });
+        if (!db.objectStoreNames.contains(STORE_TICKETS)) {
+          db.createObjectStore(STORE_TICKETS, { keyPath: "id" });
+        }
+        if (!db.objectStoreNames.contains(STORE_SHARE)) {
+          db.createObjectStore(STORE_SHARE, { keyPath: "id" });
         }
       };
       req.onsuccess = () => resolve(req.result);
@@ -20,11 +25,11 @@
     });
   }
 
-  async function withStore(mode, fn) {
+  async function withStore(storeName, mode, fn) {
     const db = await openDB();
     return new Promise((resolve, reject) => {
-      const tx = db.transaction(STORE, mode);
-      const store = tx.objectStore(STORE);
+      const tx = db.transaction(storeName, mode);
+      const store = tx.objectStore(storeName);
       const result = fn(store);
       tx.oncomplete = () => resolve(result);
       tx.onerror = () => reject(tx.error);
@@ -32,7 +37,7 @@
   }
 
   function getAllTickets() {
-    return withStore("readonly", (store) => {
+    return withStore(STORE_TICKETS, "readonly", (store) => {
       return new Promise((resolve, reject) => {
         const req = store.getAll();
         req.onsuccess = () => resolve(req.result);
@@ -42,11 +47,24 @@
   }
 
   function putTicket(ticket) {
-    return withStore("readwrite", (store) => store.put(ticket));
+    return withStore(STORE_TICKETS, "readwrite", (store) => store.put(ticket));
   }
 
   function deleteTicket(id) {
-    return withStore("readwrite", (store) => store.delete(id));
+    return withStore(STORE_TICKETS, "readwrite", (store) => store.delete(id));
+  }
+
+  function takePendingShare() {
+    return withStore(STORE_SHARE, "readwrite", (store) => {
+      return new Promise((resolve, reject) => {
+        const req = store.get("current");
+        req.onsuccess = () => {
+          if (req.result) store.delete("current");
+          resolve(req.result || null);
+        };
+        req.onerror = () => reject(req.error);
+      });
+    }).then((p) => p);
   }
 
   // ---- Date / status helpers ----
@@ -100,6 +118,78 @@
     const n = Number(price);
     if (Number.isNaN(n)) return "";
     return `$${n.toFixed(2)}`;
+  }
+
+  // ---- Shared-content parsing (best-effort, not exact) ----
+
+  const KNOWN_VENDORS = [
+    "Ticketmaster", "StubHub", "SeatGeek", "AXS", "Eventbrite",
+    "Vivid Seats", "TodayTix", "DICE", "Songkick", "Fever", "See Tickets",
+  ];
+
+  function looksLikeFilename(s) {
+    return /\.(jpe?g|png|gif|webp|heic|pdf)$/i.test(s) || /^(img|screenshot|photo)[\s_-]?\d*/i.test(s);
+  }
+
+  function parseSharedText(title, text) {
+    const combined = [title, text].filter(Boolean).join("\n");
+    const result = { eventName: "", venue: "", date: "", time: "", price: "", source: "", confirmation: "" };
+
+    for (const vendor of KNOWN_VENDORS) {
+      if (combined.toLowerCase().includes(vendor.toLowerCase())) {
+        result.source = vendor;
+        break;
+      }
+    }
+
+    // Require a digit in the captured token so labels like "Order Confirmation"
+    // (with no code after them) don't match themselves as the value.
+    const confMatch = combined.match(/\b(?:confirmation|order)\s*(?:#|number|no\.?|num)?\s*[:#]?\s*((?=[a-z0-9-]*\d)[a-z0-9-]{4,})/i);
+    if (confMatch) result.confirmation = confMatch[1];
+
+    const totalMatch = combined.match(/total[^$\n]{0,20}\$\s?([\d,]+\.\d{2})/i);
+    const anyPriceMatch = combined.match(/\$\s?([\d,]+\.\d{2})/);
+    const priceMatch = totalMatch || anyPriceMatch;
+    if (priceMatch) result.price = priceMatch[1].replace(/,/g, "");
+
+    const monthNames = "January|February|March|April|May|June|July|August|September|October|November|December|Jan|Feb|Mar|Apr|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec";
+    const dateRe = new RegExp(`\\b(${monthNames})\\.?\\s+(\\d{1,2})(?:st|nd|rd|th)?,?\\s*(\\d{4})?`, "i");
+    const dateMatch = combined.match(dateRe);
+    if (dateMatch) {
+      const year = dateMatch[3] || String(new Date().getFullYear());
+      const parsed = new Date(`${dateMatch[1]} ${dateMatch[2]}, ${year}`);
+      if (!Number.isNaN(parsed.getTime())) {
+        if (!dateMatch[3]) {
+          const today = startOfToday();
+          if (parsed < today) parsed.setFullYear(parsed.getFullYear() + 1);
+        }
+        result.date = parsed.toISOString().slice(0, 10);
+      }
+    } else {
+      const slashMatch = combined.match(/\b(\d{1,2})\/(\d{1,2})\/(\d{2,4})\b/);
+      if (slashMatch) {
+        let [, mm, dd, yy] = slashMatch;
+        if (yy.length === 2) yy = "20" + yy;
+        const parsed = new Date(`${yy}-${mm.padStart(2, "0")}-${dd.padStart(2, "0")}T00:00`);
+        if (!Number.isNaN(parsed.getTime())) result.date = parsed.toISOString().slice(0, 10);
+      }
+    }
+
+    const timeMatch = combined.match(/\b(\d{1,2}):(\d{2})\s?(AM|PM|am|pm)\b/);
+    if (timeMatch) {
+      let h = parseInt(timeMatch[1], 10);
+      const ampm = timeMatch[3].toLowerCase();
+      if (ampm === "pm" && h !== 12) h += 12;
+      if (ampm === "am" && h === 12) h = 0;
+      result.time = `${String(h).padStart(2, "0")}:${timeMatch[2]}`;
+    }
+
+    let candidate = (title || "").trim().replace(/^(fwd|fw|re)\s*:\s*/i, "");
+    if (candidate && !looksLikeFilename(candidate) && candidate.length <= 80) {
+      result.eventName = candidate;
+    }
+
+    return result;
   }
 
   // ---- App state ----
@@ -230,13 +320,28 @@
   const filePreviewName = document.getElementById("file-preview-name");
   const fileRemoveBtn = document.getElementById("file-remove-btn");
 
-  function openAddModal() {
+  function openAddModal(prefill) {
     editingId = null;
     pendingFile = undefined;
     ticketModalTitle.textContent = "Add ticket";
     deleteBtn.hidden = true;
     ticketForm.reset();
     clearFilePreview();
+
+    if (prefill) {
+      ticketForm.eventName.value = prefill.eventName || "";
+      ticketForm.venue.value = prefill.venue || "";
+      ticketForm.date.value = prefill.date || "";
+      ticketForm.time.value = prefill.time || "";
+      ticketForm.price.value = prefill.price || "";
+      ticketForm.source.value = prefill.source || "";
+      ticketForm.confirmation.value = prefill.confirmation || "";
+      if (prefill.fileBlob) {
+        pendingFile = { blob: prefill.fileBlob, name: prefill.fileName, type: prefill.fileType };
+        showFilePreview(prefill.fileBlob, prefill.fileType, prefill.fileName);
+      }
+    }
+
     ticketModal.hidden = false;
     document.getElementById("event-input").focus();
   }
@@ -394,7 +499,18 @@
     render();
   }
 
-  reload();
+  async function consumeSharedContentIfAny() {
+    if (new URLSearchParams(location.search).get("shared") !== "1") return;
+    history.replaceState(null, "", location.pathname);
+
+    const share = await takePendingShare();
+    if (!share) return;
+
+    const parsed = parseSharedText(share.title, share.text || share.url);
+    openAddModal({ ...parsed, fileBlob: share.fileBlob, fileType: share.fileType, fileName: share.fileName });
+  }
+
+  reload().then(consumeSharedContentIfAny);
 
   // ---- Service worker (offline support) ----
 
