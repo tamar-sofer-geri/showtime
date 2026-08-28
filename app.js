@@ -658,6 +658,108 @@
     })
   );
 
+  // ---- Share choice: new ticket, or attach the shared file to an existing one? ----
+
+  const shareChoiceModal = document.getElementById("share-choice-modal");
+  const shareChoicePreview = document.getElementById("share-choice-preview");
+  const shareChoiceNewBtn = document.getElementById("share-choice-new-btn");
+  const shareChoiceExistingBtn = document.getElementById("share-choice-existing-btn");
+  const pickerModal = document.getElementById("picker-modal");
+  const pickerList = document.getElementById("picker-list");
+
+  let pendingShare = null; // { parsed, fileBlob, fileType, fileName } while the choice/picker modals are open
+
+  function openShareChoiceModal(parsed, share) {
+    pendingShare = { parsed, fileBlob: share.fileBlob, fileType: share.fileType, fileName: share.fileName };
+
+    shareChoicePreview.innerHTML = "";
+    if (share.fileType && share.fileType.startsWith("image/")) {
+      const img = document.createElement("img");
+      img.alt = "";
+      img.src = trackUrl(URL.createObjectURL(share.fileBlob));
+      shareChoicePreview.appendChild(img);
+    }
+    const name = document.createElement("span");
+    name.className = "file-preview-name";
+    name.textContent = share.fileName || "Attachment";
+    shareChoicePreview.appendChild(name);
+
+    shareChoiceModal.hidden = false;
+  }
+
+  function closeShareChoiceModal() {
+    shareChoiceModal.hidden = true;
+  }
+
+  shareChoiceModal.querySelectorAll("[data-share-choice-close]").forEach((el) =>
+    el.addEventListener("click", () => {
+      pendingShare = null;
+      closeShareChoiceModal();
+    })
+  );
+
+  shareChoiceNewBtn.addEventListener("click", () => {
+    const share = pendingShare;
+    closeShareChoiceModal();
+    if (!share) return;
+    openAddModal({ ...share.parsed, fileBlob: share.fileBlob, fileType: share.fileType, fileName: share.fileName });
+    pendingShare = null;
+  });
+
+  shareChoiceExistingBtn.addEventListener("click", () => {
+    closeShareChoiceModal();
+    openPickerModal();
+  });
+
+  function openPickerModal() {
+    const sorted = [...tickets].sort((a, b) => ticketDateTime(b) - ticketDateTime(a));
+    pickerList.innerHTML = "";
+    for (const t of sorted) {
+      const li = document.createElement("li");
+      const row = document.createElement("button");
+      row.type = "button";
+      row.className = "picker-row";
+      row.addEventListener("click", () => {
+        closePickerModal();
+        attachSharedFileToTicket(t.id);
+      });
+
+      const name = document.createElement("span");
+      name.className = "picker-row-name";
+      name.textContent = t.eventName;
+      row.appendChild(name);
+
+      const date = document.createElement("span");
+      date.className = "picker-row-date";
+      date.textContent = formatDate(t.date);
+      row.appendChild(date);
+
+      li.appendChild(row);
+      pickerList.appendChild(li);
+    }
+    pickerModal.hidden = false;
+  }
+
+  function closePickerModal() {
+    pickerModal.hidden = true;
+  }
+
+  pickerModal.querySelectorAll("[data-picker-close]").forEach((el) =>
+    el.addEventListener("click", () => {
+      pendingShare = null;
+      closePickerModal();
+    })
+  );
+
+  function attachSharedFileToTicket(ticketId) {
+    const share = pendingShare;
+    pendingShare = null;
+    if (!share) return;
+    openEditModal(ticketId);
+    pendingFile = { blob: share.fileBlob, name: share.fileName, type: share.fileType };
+    showFilePreview(share.fileBlob, share.fileType, share.fileName);
+  }
+
   // ---- Load ----
 
   async function reload() {
@@ -674,7 +776,12 @@
     if (!share) return;
 
     const parsed = parseSharedText(share.title, share.text || share.url);
-    openAddModal({ ...parsed, fileBlob: share.fileBlob, fileType: share.fileType, fileName: share.fileName });
+
+    if (share.fileBlob && tickets.length > 0) {
+      openShareChoiceModal(parsed, share);
+    } else {
+      openAddModal({ ...parsed, fileBlob: share.fileBlob, fileType: share.fileType, fileName: share.fileName });
+    }
   }
 
   reload().then(consumeSharedContentIfAny);

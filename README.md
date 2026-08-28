@@ -21,9 +21,12 @@ Once installed to the home screen (Android/Chrome), Showtime registers as an OS 
 
 1. Sends the shared title/text/URL and any attached image or PDF to `share-target/`.
 2. A service worker fetch handler intercepts that request (no backend involved — GitHub Pages is static), stashes the payload in IndexedDB, and redirects to `index.html?shared=1`.
-3. On load, the app reads the stash, runs it through a best-effort regex parser (`parseSharedText` in `app.js`) to guess date, time, price, purchase source, and confirmation number, and opens the **Add ticket** form pre-filled with whatever it found plus the attachment already attached.
+3. On load, the app reads the stash and runs it through a best-effort regex parser (`parseSharedText` in `app.js`) to guess event name, venue, date, time, price, seat/section, purchase source, and confirmation number.
+4. If the share includes a file **and** there's at least one existing ticket, it asks first: attach the file to a ticket you already saved (a picker lists them), or create a new ticket. Otherwise it goes straight to a new, pre-filled **Add ticket** form.
 
-This is heuristic, not OCR/AI — it looks for patterns like `$123.45`, `September 12, 2026`, `7:30 PM`, known vendor names (Ticketmaster, StubHub, SeatGeek, etc.), and an order/confirmation number near those words. The **event name** is taken from the share's title (usually the email subject), which is often not the show name — that field in particular usually needs a quick manual fix. Venue isn't guessed at all. Everything is still editable/skippable before saving.
+This is heuristic, not OCR/AI — it looks for patterns like `$123.45`, `September 12, 2026`, `7:30 PM`, an explicit `Event` label line, phrases like "confirmation for <event>", known vendor names (Ticketmaster, StubHub, SeatGeek, Eventbrite, etc.), an order/confirmation number, a `City, ST ZIP` line (to infer venue), and `Section X, Row Y, Seat Z` lines. It's been tuned against real Ticketmaster and Eventbrite emails but won't be perfect for every vendor's format — everything is still editable/skippable before saving.
+
+**Attaching a ticket's QR code separately:** many apps' native ticket screens (e.g. the Eventbrite app) aren't regular web text, so sharing from there carries the image but little to no usable text. The email, by contrast, has selectable text but no image. To get both on one ticket: share the confirmation email first (creates the ticket with full details), then take a plain OS screenshot of the QR code screen and share *that* to Showtime — since a ticket already exists, you'll be offered "Attach to existing ticket" instead of creating a duplicate.
 
 **Caveats:**
 - Share targets are an Android/Chrome (and Chromium browsers) feature — iOS Safari doesn't support the Web Share Target API, so this won't appear in iOS's share sheet.

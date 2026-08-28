@@ -16,7 +16,7 @@
   <link rel="apple-touch-icon" href="apple-touch-icon.png?v=2" />
   <link rel="icon" href="icon.svg?v=2" type="image/svg+xml" />
   <title>Showtime</title>
-  <link rel="stylesheet" href="styles.css?v=4" />
+  <link rel="stylesheet" href="styles.css?v=5" />
 </head>
 <body>
   <div class="app">
@@ -117,6 +117,32 @@
     </div>
   </div>
 
+  <!-- Shown when an incoming share includes a file: new ticket, or attach to an existing one? -->
+  <div id="share-choice-modal" class="modal" hidden>
+    <div class="modal-backdrop" data-share-choice-close></div>
+    <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="share-choice-title">
+      <h2 id="share-choice-title">Attach this file</h2>
+      <div id="share-choice-preview" class="file-preview file-preview-static"></div>
+      <p class="modal-hint">Is this for a new ticket, or should it attach to a ticket you already saved?</p>
+      <div class="modal-actions modal-actions-stacked">
+        <button type="button" id="share-choice-existing-btn" class="btn btn-primary">Attach to existing ticket</button>
+        <button type="button" id="share-choice-new-btn" class="btn btn-ghost-outline">Create new ticket</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Ticket picker for attaching a shared file to an existing ticket -->
+  <div id="picker-modal" class="modal" hidden>
+    <div class="modal-backdrop" data-picker-close></div>
+    <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="picker-title">
+      <h2 id="picker-title">Attach to which ticket?</h2>
+      <ul id="picker-list" class="picker-list"></ul>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-ghost" data-picker-close>Cancel</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Full-size attachment viewer -->
   <div id="attachment-modal" class="modal" hidden>
     <div class="modal-backdrop" data-attachment-close></div>
@@ -127,6 +153,6 @@
     </div>
   </div>
 
-  <script src="app.js?v=8"></script>
+  <script src="app.js?v=9"></script>
 </body>
 </html>

@@ -368,6 +368,54 @@ html, body {
   display: flex;
   gap: 8px;
 }
+.modal-actions-stacked {
+  flex-direction: column;
+  align-items: stretch;
+}
+.modal-actions-stacked .btn { width: 100%; }
+
+.modal-hint {
+  font-size: 13px;
+  color: var(--muted);
+  margin: 12px 0 0;
+}
+
+.file-preview-static { margin-top: 12px; }
+
+.btn-ghost-outline {
+  background: transparent;
+  color: var(--accent-ink);
+  border: 1.5px solid var(--accent);
+}
+
+/* Ticket picker (attach a shared file to an existing ticket) */
+.picker-list {
+  list-style: none;
+  margin: 14px 0 0;
+  padding: 0;
+  max-height: 50vh;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.picker-row {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  text-align: left;
+  background: var(--bg);
+  border: 1.5px solid var(--line);
+  border-radius: 10px;
+  padding: 10px 12px;
+  cursor: pointer;
+  font-family: inherit;
+}
+.picker-row:active { opacity: 0.7; }
+.picker-row-name { font-size: 15px; font-weight: 600; color: var(--ink); }
+.picker-row-date { font-size: 12.5px; color: var(--muted); }
 
 /* Attachment viewer */
 .attachment-card {
