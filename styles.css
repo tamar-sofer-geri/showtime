@@ -497,13 +497,6 @@ html, body {
   display: block;
   pointer-events: none;
 }
-.attachment-card iframe {
-  width: 92vw;
-  height: 88vh;
-  border: none;
-  border-radius: 12px;
-  background: #fff;
-}
 .attachment-close-btn {
   position: absolute;
   top: -14px;

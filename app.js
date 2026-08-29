@@ -529,7 +529,7 @@
 
   function viewFile(f) {
     const kind = f.type && f.type.startsWith("image/") ? "image" : "pdf";
-    openAttachment(trackUrl(URL.createObjectURL(f.blob)), kind);
+    openAttachment(trackUrl(URL.createObjectURL(f.blob)), kind, f.name);
   }
 
   // ---- Tabs ----
@@ -748,19 +748,27 @@
 
   const attachmentModal = document.getElementById("attachment-modal");
   const attachmentImg = document.getElementById("attachment-img");
-  const attachmentPdf = document.getElementById("attachment-pdf");
+  const attachmentLink = document.getElementById("attachment-link");
 
-  function openAttachment(url, kind) {
+  function openAttachment(url, kind, fileName) {
     if (kind === "image") {
       attachmentImg.hidden = false;
       attachmentImg.src = url;
-      attachmentPdf.hidden = true;
-      attachmentPdf.src = "";
+      attachmentLink.hidden = true;
     } else {
       attachmentImg.hidden = true;
       attachmentImg.src = "";
-      attachmentPdf.hidden = false;
-      attachmentPdf.src = url;
+      attachmentLink.hidden = false;
+      attachmentLink.href = url;
+      attachmentLink.textContent = fileName ? `Open ${fileName}` : "Open PDF";
+      // Android Chrome won't render a PDF inline inside an iframe (it falls
+      // back to a generic "open externally" prompt), but a real navigation
+      // to a blob: URL does render it properly — so try that automatically
+      // first. Chrome's brief "user activation" window after a real touch
+      // usually still covers a setTimeout-delayed click like this long
+      // press's, so most of the time no tap is needed at all; the visible
+      // button above is the guaranteed fallback if it's blocked.
+      attachmentLink.click();
     }
     attachmentModal.hidden = false;
   }

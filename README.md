@@ -11,7 +11,7 @@ Tap **+** to add a ticket: show/event name, venue, date & time (24-hour, quarter
 
 All data — including attached photos/PDFs — is stored locally on-device in IndexedDB. Nothing leaves the device; there's no backend or sync (yet).
 
-PDF attachments render inline in the viewer (an `<iframe>` on a `blob:` URL) rather than linking out to a separate "Open PDF" step. Ticket-card thumbnails are also `pointer-events: none`, so a long-press routes entirely to the card (opening our own viewer) instead of also triggering Android Chrome's native "Copy/Download/Share image" menu on the `<img>` underneath.
+Long-pressing a PDF attachment tries to open it immediately (a real navigation to its `blob:` URL, not an embedded `<iframe>` — Android Chrome doesn't reliably render PDFs inline in an iframe, falling back to a confusing generic "open externally" prompt instead). Whether the automatic open actually goes through depends on the browser still considering the long-press's delayed callback part of the same user gesture; either way, the viewer modal underneath always shows a clearly labeled "Open <filename>" button as a guaranteed one-tap fallback. Ticket-card thumbnails are `pointer-events: none`, so a long-press routes entirely to the card (opening our own viewer) instead of also triggering Android Chrome's native "Copy/Download/Share image" menu on the `<img>` underneath.
 
 ## Reminders
 
