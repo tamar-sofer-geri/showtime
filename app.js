@@ -520,19 +520,7 @@
   function openAttachmentForTicket(t) {
     const files = getTicketFiles(t);
     if (!files.length) return;
-    if (files.length === 1) {
-      viewFile(files[0]);
-      return;
-    }
-    openFilePicker(files);
-  }
-
-  function viewFile(f) {
-    if (f.type && f.type.startsWith("image/")) {
-      openAttachmentImage(trackUrl(URL.createObjectURL(f.blob)));
-    } else {
-      openAttachmentPdf(f.blob);
-    }
+    openAttachmentCarousel(files, 0);
   }
 
   // ---- Tabs ----
@@ -688,13 +676,13 @@
         thumb.className = "file-list-icon";
         thumb.textContent = "📄";
       }
-      thumb.addEventListener("click", () => viewFile(f));
+      thumb.addEventListener("click", () => openAttachmentCarousel(workingFiles, i));
       row.appendChild(thumb);
 
       const name = document.createElement("span");
       name.className = "file-preview-name file-list-name";
       name.textContent = f.name || "Attachment";
-      name.addEventListener("click", () => viewFile(f));
+      name.addEventListener("click", () => openAttachmentCarousel(workingFiles, i));
       row.appendChild(name);
 
       const removeBtn = document.createElement("button");
@@ -750,19 +738,11 @@
   // ---- Attachment viewer ----
 
   const attachmentModal = document.getElementById("attachment-modal");
-  const attachmentImg = document.getElementById("attachment-img");
-  const attachmentPdfEl = document.getElementById("attachment-pdf");
+  const attachmentCarousel = document.getElementById("attachment-carousel");
+  const attachmentDots = document.getElementById("attachment-dots");
 
-  function openAttachmentImage(url) {
-    attachmentImg.hidden = false;
-    attachmentImg.src = url;
-    attachmentPdfEl.hidden = true;
-    attachmentPdfEl.innerHTML = "";
-    attachmentModal.hidden = false;
-  }
-
-  // Renders every page of the PDF onto its own <canvas>, fully inside our
-  // own modal — no navigation, no separate browser/native PDF viewer, no
+  // Renders every page of a PDF onto its own <canvas> inside the given
+  // container — no navigation, no separate browser/native PDF viewer, no
   // "how do I get back to the app" confusion. Both the native <iframe>-embed
   // and the real-navigation approaches tried earlier ran into real platform
   // limitations (Android Chrome won't render a blob: PDF inline in an
@@ -780,19 +760,14 @@
     return pdfjsLibPromise;
   }
 
-  async function openAttachmentPdf(blob) {
-    attachmentImg.hidden = true;
-    attachmentImg.src = "";
-    attachmentPdfEl.hidden = false;
-    attachmentPdfEl.innerHTML = '<p class="attachment-pdf-status">Loading…</p>';
-    attachmentModal.hidden = false;
-
+  async function renderPdfInto(container, blob) {
+    container.innerHTML = '<p class="attachment-pdf-status">Loading…</p>';
     try {
       const pdfjsLib = await loadPdfJs();
       const pdf = await pdfjsLib.getDocument({ data: await blob.arrayBuffer() }).promise;
       if (attachmentModal.hidden) return; // closed while loading
 
-      attachmentPdfEl.innerHTML = "";
+      container.innerHTML = "";
       for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
         const page = await pdf.getPage(pageNum);
         const viewport = page.getViewport({ scale: 2 });
@@ -800,17 +775,67 @@
         canvas.width = viewport.width;
         canvas.height = viewport.height;
         await page.render({ canvasContext: canvas.getContext("2d"), viewport }).promise;
-        attachmentPdfEl.appendChild(canvas);
+        container.appendChild(canvas);
       }
     } catch (err) {
-      attachmentPdfEl.innerHTML = '<p class="attachment-pdf-status">Couldn\'t display this PDF.</p>';
+      container.innerHTML = '<p class="attachment-pdf-status">Couldn\'t display this PDF.</p>';
     }
   }
+
+  // The full-size viewer for one or more of a ticket's attached files —
+  // swipeable (native horizontal scroll-snap, no custom gesture code) when
+  // there's more than one, with page dots to match. startIndex lets a tap
+  // on a specific file (e.g. in the edit form's file list) open the
+  // carousel already on that one.
+  function openAttachmentCarousel(files, startIndex) {
+    attachmentCarousel.innerHTML = "";
+    attachmentDots.innerHTML = "";
+    attachmentDots.hidden = files.length <= 1;
+
+    files.forEach((f, i) => {
+      const slide = document.createElement("div");
+      slide.className = "attachment-slide";
+
+      if (f.type && f.type.startsWith("image/")) {
+        const img = document.createElement("img");
+        img.alt = "";
+        img.src = trackUrl(URL.createObjectURL(f.blob));
+        slide.appendChild(img);
+      } else {
+        const pdfContainer = document.createElement("div");
+        pdfContainer.className = "attachment-pdf";
+        slide.appendChild(pdfContainer);
+        renderPdfInto(pdfContainer, f.blob);
+      }
+
+      attachmentCarousel.appendChild(slide);
+
+      if (files.length > 1) {
+        const dot = document.createElement("span");
+        dot.className = "attachment-dot" + (i === startIndex ? " is-active" : "");
+        attachmentDots.appendChild(dot);
+      }
+    });
+
+    attachmentModal.hidden = false;
+
+    const slideEls = attachmentCarousel.children;
+    if (slideEls[startIndex]) {
+      attachmentCarousel.scrollLeft = slideEls[startIndex].offsetLeft;
+    }
+  }
+
+  attachmentCarousel.addEventListener("scroll", () => {
+    if (!attachmentCarousel.clientWidth) return;
+    const idx = Math.round(attachmentCarousel.scrollLeft / attachmentCarousel.clientWidth);
+    [...attachmentDots.children].forEach((dot, i) => dot.classList.toggle("is-active", i === idx));
+  });
 
   attachmentModal.querySelectorAll("[data-attachment-close]").forEach((el) =>
     el.addEventListener("click", () => {
       attachmentModal.hidden = true;
-      attachmentPdfEl.innerHTML = "";
+      attachmentCarousel.innerHTML = "";
+      attachmentDots.innerHTML = "";
     })
   );
 
@@ -927,15 +952,6 @@
     );
   }
 
-  function openFilePicker(files) {
-    openListPicker(
-      "View which file?",
-      files.map((f, i) => ({
-        primary: f.name || `Attachment ${i + 1}`,
-        onSelect: () => viewFile(f),
-      }))
-    );
-  }
 
   // Opens an existing ticket's Edit form, then layers the shared content on
   // top: any file gets appended (never replaces existing attachments), and

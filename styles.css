@@ -484,21 +484,41 @@ html, body {
 /* Attachment viewer */
 .attachment-card {
   position: relative;
+  width: 92vw;
   max-width: 92vw;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+.attachment-carousel {
+  width: 100%;
   max-height: 88vh;
+  display: flex;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  -webkit-overflow-scrolling: touch;
+  border-radius: 12px;
+  scrollbar-width: none;
+}
+.attachment-carousel::-webkit-scrollbar { display: none; }
+.attachment-slide {
+  flex: 0 0 100%;
+  min-width: 0;
+  scroll-snap-align: center;
   display: flex;
   align-items: center;
   justify-content: center;
 }
-.attachment-card img {
-  max-width: 92vw;
+.attachment-slide img {
+  max-width: 100%;
   max-height: 88vh;
   border-radius: 12px;
   display: block;
   pointer-events: none;
 }
 .attachment-pdf {
-  width: 92vw;
+  width: 100%;
   max-height: 88vh;
   overflow-y: auto;
   border-radius: 12px;
@@ -522,6 +542,19 @@ html, body {
   padding: 24px;
   text-align: center;
 }
+.attachment-dots {
+  display: flex;
+  justify-content: center;
+  gap: 6px;
+}
+.attachment-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.4);
+  transition: background 0.15s ease;
+}
+.attachment-dot.is-active { background: #fff; }
 .attachment-close-btn {
   position: absolute;
   top: -14px;
@@ -536,6 +569,7 @@ html, body {
   line-height: 1;
   cursor: pointer;
   box-shadow: var(--shadow);
+  z-index: 1;
 }
 
 /* Undo bar */
