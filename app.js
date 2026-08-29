@@ -293,11 +293,19 @@
 
   function renderCard(t, isUpcomingList) {
     const li = document.createElement("li");
+    li.className = "ticket-row-wrap";
+
+    const deleteBg = document.createElement("div");
+    deleteBg.className = "ticket-row-delete-bg";
+    deleteBg.textContent = "Delete";
+    deleteBg.setAttribute("aria-hidden", "true");
+    li.appendChild(deleteBg);
+
     const card = document.createElement("div");
     const soon = isUpcomingList && daysUntil(t) <= 7;
     card.className = "ticket-card" + (soon ? " is-soon" : "");
     card.tabIndex = 0;
-    wireCardPress(card, t);
+    wireCardGestures(card, t);
 
     const files = getTicketFiles(t);
     const thumbWrap = document.createElement("div");
@@ -360,15 +368,21 @@
   }
 
   // Short tap opens Edit; press-and-hold jumps straight to the attached
-  // ticket file, skipping the edit form entirely.
+  // ticket file; a right swipe past 40% of the card's width deletes it
+  // (with undo). All three share one pointer-gesture state machine so they
+  // can't fire on top of each other.
   const LONG_PRESS_MS = 500;
-  const LONG_PRESS_MOVE_TOLERANCE = 10;
+  const GESTURE_MOVE_THRESHOLD = 10;
 
-  function wireCardPress(card, t) {
+  function wireCardGestures(card, t) {
     let pressTimer = null;
     let longPressFired = false;
+    let wasSwipe = false;
+    let dragging = false;
+    let axis = null; // null | "x" (swipe) | "y" (vertical scroll)
     let startX = 0;
     let startY = 0;
+    let currentDx = 0;
 
     const cancelTimer = () => {
       if (pressTimer) {
@@ -379,9 +393,14 @@
 
     card.addEventListener("pointerdown", (e) => {
       if (e.pointerType === "mouse" && e.button !== 0) return;
-      longPressFired = false;
       startX = e.clientX;
       startY = e.clientY;
+      axis = null;
+      dragging = true;
+      longPressFired = false;
+      wasSwipe = false;
+      currentDx = 0;
+      card.style.transition = "none";
       pressTimer = setTimeout(() => {
         longPressFired = true;
         openAttachmentForTicket(t);
@@ -389,23 +408,114 @@
     });
 
     card.addEventListener("pointermove", (e) => {
-      if (Math.abs(e.clientX - startX) > LONG_PRESS_MOVE_TOLERANCE || Math.abs(e.clientY - startY) > LONG_PRESS_MOVE_TOLERANCE) {
-        cancelTimer();
+      if (!dragging) return;
+      const dx = e.clientX - startX;
+      const dy = e.clientY - startY;
+
+      if (axis === null) {
+        if (Math.abs(dx) <= GESTURE_MOVE_THRESHOLD && Math.abs(dy) <= GESTURE_MOVE_THRESHOLD) return;
+        if (Math.abs(dx) > Math.abs(dy)) {
+          axis = "x";
+          wasSwipe = true;
+          cancelTimer();
+          try {
+            card.setPointerCapture(e.pointerId);
+          } catch {
+            // Ignore — capture is a nice-to-have so the drag keeps tracking
+            // outside the element's bounds, not required for it to work.
+          }
+        } else {
+          axis = "y";
+          dragging = false;
+          cancelTimer();
+          return;
+        }
       }
+
+      currentDx = Math.max(0, Math.min(dx, card.offsetWidth));
+      card.style.transform = `translateX(${currentDx}px)`;
+      e.preventDefault();
     });
 
-    card.addEventListener("pointerup", cancelTimer);
-    card.addEventListener("pointerleave", cancelTimer);
-    card.addEventListener("pointercancel", cancelTimer);
+    function finishDrag() {
+      if (!dragging) return;
+      dragging = false;
+      cancelTimer();
+      if (axis !== "x") return;
+      axis = null;
+      const threshold = card.offsetWidth * 0.4;
+      card.style.transition = "transform 0.2s ease";
+      if (currentDx > threshold) {
+        card.style.transform = "translateX(100%)";
+        setTimeout(() => swipeDeleteTicket(t), 150);
+      } else {
+        card.style.transform = "translateX(0)";
+        // Snapped back rather than deleting — don't let a stale "this was a
+        // swipe" flag block a later click that arrives with no pointerdown
+        // of its own (e.g. keyboard Enter/Space activation).
+        wasSwipe = false;
+      }
+    }
+
+    card.addEventListener("pointerup", finishDrag);
+    card.addEventListener("pointercancel", finishDrag);
 
     card.addEventListener("click", () => {
-      if (longPressFired) {
+      if (longPressFired || wasSwipe) {
         longPressFired = false;
+        wasSwipe = false;
         return;
       }
       openEditModal(t.id);
     });
   }
+
+  // ---- Swipe-to-delete with undo ----
+
+  const undoBar = document.getElementById("undo-bar");
+  const undoLabel = document.getElementById("undo-label");
+  const undoBtn = document.getElementById("undo-btn");
+  const UNDO_WINDOW_MS = 3000;
+
+  let pendingDelete = null; // { ticket, timer }
+
+  function showUndoBar(name) {
+    undoLabel.textContent = `Deleted "${name}"`;
+    undoBar.hidden = false;
+  }
+
+  function hideUndoBar() {
+    undoBar.hidden = true;
+  }
+
+  async function finalizePendingDelete() {
+    if (!pendingDelete) return;
+    const { ticket, timer } = pendingDelete;
+    clearTimeout(timer);
+    pendingDelete = null;
+    hideUndoBar();
+    await deleteTicket(ticket.id);
+  }
+
+  function swipeDeleteTicket(ticket) {
+    finalizePendingDelete();
+    tickets = tickets.filter((t) => t.id !== ticket.id);
+    render();
+    showUndoBar(ticket.eventName);
+    pendingDelete = { ticket, timer: setTimeout(finalizePendingDelete, UNDO_WINDOW_MS) };
+  }
+
+  function undoDelete() {
+    if (!pendingDelete) return;
+    clearTimeout(pendingDelete.timer);
+    const { ticket } = pendingDelete;
+    pendingDelete = null;
+    tickets.push(ticket);
+    render();
+    hideUndoBar();
+  }
+
+  undoBtn.addEventListener("click", undoDelete);
 
   function openAttachmentForTicket(t) {
     const files = getTicketFiles(t);
@@ -443,7 +553,6 @@
   const ticketModal = document.getElementById("ticket-modal");
   const ticketModalTitle = document.getElementById("ticket-modal-title");
   const ticketForm = document.getElementById("ticket-form");
-  const deleteBtn = document.getElementById("ticket-delete-btn");
   const fileInput = document.getElementById("file-input");
   const fileListEl = document.getElementById("file-list");
 
@@ -513,7 +622,6 @@
     editingId = null;
     workingFiles = [];
     ticketModalTitle.textContent = "Add ticket";
-    deleteBtn.hidden = true;
     ticketForm.reset();
     setTimeSelects("");
 
@@ -542,7 +650,6 @@
     editingId = id;
     workingFiles = getTicketFiles(t).slice();
     ticketModalTitle.textContent = "Edit ticket";
-    deleteBtn.hidden = false;
     ticketForm.reset();
     ticketForm.eventName.value = t.eventName || "";
     ticketForm.venue.value = t.venue || "";
@@ -633,14 +740,6 @@
     };
 
     await putTicket(ticket);
-    await reload();
-    closeTicketModal();
-  });
-
-  deleteBtn.addEventListener("click", async () => {
-    if (!editingId) return;
-    if (!confirm("Delete this ticket?")) return;
-    await deleteTicket(editingId);
     await reload();
     closeTicketModal();
   });

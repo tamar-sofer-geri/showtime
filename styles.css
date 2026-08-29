@@ -88,7 +88,27 @@ html, body {
   gap: 8px;
 }
 
+.ticket-row-wrap {
+  position: relative;
+  border-radius: 14px;
+  overflow: hidden;
+}
+
+.ticket-row-delete-bg {
+  position: absolute;
+  inset: 0;
+  border-radius: 14px;
+  background: var(--danger);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  padding-left: 22px;
+  font-weight: 700;
+  font-size: 14px;
+}
+
 .ticket-card {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 12px;
@@ -98,7 +118,8 @@ html, body {
   box-shadow: var(--shadow);
   padding: 10px 12px;
   cursor: pointer;
-  touch-action: manipulation;
+  touch-action: pan-y;
+  will-change: transform;
   -webkit-touch-callout: none;
   -webkit-user-select: none;
   user-select: none;
@@ -219,13 +240,6 @@ html, body {
 .btn:active { transform: scale(0.96); }
 .btn-primary { background: var(--marquee-gradient); color: #fff; box-shadow: var(--marquee-shadow); }
 .btn-ghost { background: transparent; color: var(--muted); }
-.btn-danger {
-  background: transparent;
-  color: var(--danger);
-  padding-left: 0;
-  padding-right: 0;
-  min-width: 0;
-}
 
 /* Bottom tab bar */
 .tabbar {
@@ -413,14 +427,6 @@ html, body {
   gap: 8px;
   margin-top: 18px;
 }
-.modal-actions-split {
-  justify-content: space-between;
-  align-items: center;
-}
-.modal-actions-right {
-  display: flex;
-  gap: 8px;
-}
 .modal-actions-stacked {
   flex-direction: column;
   align-items: stretch;
@@ -499,4 +505,32 @@ html, body {
   line-height: 1;
   cursor: pointer;
   box-shadow: var(--shadow);
+}
+
+/* Undo bar */
+.undo-bar[hidden] { display: none; }
+.undo-bar {
+  position: fixed;
+  left: 50%;
+  bottom: calc(76px + env(safe-area-inset-bottom));
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  background: var(--ink);
+  color: #fff;
+  padding: 12px 16px;
+  border-radius: 999px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+  z-index: 20;
+  font-size: 14px;
+}
+.undo-btn {
+  border: none;
+  background: none;
+  color: var(--accent);
+  font-weight: 700;
+  font-size: 14px;
+  cursor: pointer;
+  padding: 0;
 }
