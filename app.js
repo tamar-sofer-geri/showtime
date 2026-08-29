@@ -313,11 +313,11 @@
     const ph = document.createElement("div");
     ph.className = "ticket-thumb-placeholder";
     ph.innerHTML =
-      '<svg viewBox="0 0 24 24" width="24" height="24" fill="none" xmlns="http://www.w3.org/2000/svg">' +
-      '<rect x="2" y="6" width="20" height="12" rx="3" fill="currentColor"/>' +
-      '<line x1="12" y1="6" x2="12" y2="18" stroke="#fff" stroke-width="1.5" stroke-dasharray="2 2"/>' +
-      '<circle cx="7" cy="12" r="1.1" fill="#fff"/>' +
-      '<circle cx="17" cy="12" r="1.1" fill="#fff"/>' +
+      '<svg viewBox="0 0 64 64" width="30" height="30" xmlns="http://www.w3.org/2000/svg">' +
+      '<path d="M14 24a4 4 0 0 1 4-4h28a4 4 0 0 1 4 4v2a3 3 0 0 0 0 6v2a4 4 0 0 1-4 4H18a4 4 0 0 1-4-4v-2a3 3 0 0 0 0-6v-2z" fill="currentColor"/>' +
+      '<line x1="32" y1="20" x2="32" y2="44" stroke="#fff" stroke-width="2" stroke-dasharray="3,3"/>' +
+      '<circle cx="24" cy="32" r="2.4" fill="#fff"/>' +
+      '<circle cx="40" cy="32" r="2.4" fill="#fff"/>' +
       "</svg>";
     thumbWrap.appendChild(ph);
     if (files.length > 1) {
