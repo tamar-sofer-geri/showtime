@@ -779,6 +779,16 @@
     })
   );
 
+  // Opening a PDF navigates the whole PWA window to its blob: URL (see
+  // openAttachment below) — coming back via the phone's back gesture
+  // restores this page from the browser's back-forward cache exactly as it
+  // was mid-navigation, with the attachment modal still marked open but
+  // nothing around it re-rendered. Close it whenever the page becomes
+  // visible again after being backgrounded like that.
+  window.addEventListener("pageshow", (e) => {
+    if (e.persisted) attachmentModal.hidden = true;
+  });
+
   // ---- Share choice: new ticket, or attach the shared file to an existing one? ----
 
   const shareChoiceModal = document.getElementById("share-choice-modal");
