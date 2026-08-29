@@ -528,8 +528,11 @@
   }
 
   function viewFile(f) {
-    const kind = f.type && f.type.startsWith("image/") ? "image" : "pdf";
-    openAttachment(trackUrl(URL.createObjectURL(f.blob)), kind, f.name);
+    if (f.type && f.type.startsWith("image/")) {
+      openAttachmentImage(trackUrl(URL.createObjectURL(f.blob)));
+    } else {
+      openAttachmentPdf(f.blob);
+    }
   }
 
   // ---- Tabs ----
@@ -748,46 +751,68 @@
 
   const attachmentModal = document.getElementById("attachment-modal");
   const attachmentImg = document.getElementById("attachment-img");
-  const attachmentLink = document.getElementById("attachment-link");
+  const attachmentPdfEl = document.getElementById("attachment-pdf");
 
-  function openAttachment(url, kind, fileName) {
-    if (kind === "image") {
-      attachmentImg.hidden = false;
-      attachmentImg.src = url;
-      attachmentLink.hidden = true;
-    } else {
-      attachmentImg.hidden = true;
-      attachmentImg.src = "";
-      attachmentLink.hidden = false;
-      attachmentLink.href = url;
-      attachmentLink.textContent = fileName ? `Open ${fileName}` : "Open PDF";
-      // Android Chrome won't render a PDF inline inside an iframe (it falls
-      // back to a generic "open externally" prompt), but a real navigation
-      // to a blob: URL does render it properly — so try that automatically
-      // first. Chrome's brief "user activation" window after a real touch
-      // usually still covers a setTimeout-delayed click like this long
-      // press's, so most of the time no tap is needed at all; the visible
-      // button above is the guaranteed fallback if it's blocked.
-      attachmentLink.click();
-    }
+  function openAttachmentImage(url) {
+    attachmentImg.hidden = false;
+    attachmentImg.src = url;
+    attachmentPdfEl.hidden = true;
+    attachmentPdfEl.innerHTML = "";
     attachmentModal.hidden = false;
+  }
+
+  // Renders every page of the PDF onto its own <canvas>, fully inside our
+  // own modal — no navigation, no separate browser/native PDF viewer, no
+  // "how do I get back to the app" confusion. Both the native <iframe>-embed
+  // and the real-navigation approaches tried earlier ran into real platform
+  // limitations (Android Chrome won't render a blob: PDF inline in an
+  // iframe; a real navigation takes over the whole installed-PWA window
+  // with no reliable way back). Rendering it ourselves with pdf.js
+  // sidesteps both.
+  let pdfjsLibPromise = null;
+  function loadPdfJs() {
+    if (!pdfjsLibPromise) {
+      pdfjsLibPromise = import("./vendor/pdfjs/pdf.min.mjs").then((lib) => {
+        lib.GlobalWorkerOptions.workerSrc = "vendor/pdfjs/pdf.worker.min.mjs";
+        return lib;
+      });
+    }
+    return pdfjsLibPromise;
+  }
+
+  async function openAttachmentPdf(blob) {
+    attachmentImg.hidden = true;
+    attachmentImg.src = "";
+    attachmentPdfEl.hidden = false;
+    attachmentPdfEl.innerHTML = '<p class="attachment-pdf-status">Loading…</p>';
+    attachmentModal.hidden = false;
+
+    try {
+      const pdfjsLib = await loadPdfJs();
+      const pdf = await pdfjsLib.getDocument({ data: await blob.arrayBuffer() }).promise;
+      if (attachmentModal.hidden) return; // closed while loading
+
+      attachmentPdfEl.innerHTML = "";
+      for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+        const page = await pdf.getPage(pageNum);
+        const viewport = page.getViewport({ scale: 2 });
+        const canvas = document.createElement("canvas");
+        canvas.width = viewport.width;
+        canvas.height = viewport.height;
+        await page.render({ canvasContext: canvas.getContext("2d"), viewport }).promise;
+        attachmentPdfEl.appendChild(canvas);
+      }
+    } catch (err) {
+      attachmentPdfEl.innerHTML = '<p class="attachment-pdf-status">Couldn\'t display this PDF.</p>';
+    }
   }
 
   attachmentModal.querySelectorAll("[data-attachment-close]").forEach((el) =>
     el.addEventListener("click", () => {
       attachmentModal.hidden = true;
+      attachmentPdfEl.innerHTML = "";
     })
   );
-
-  // Opening a PDF navigates the whole PWA window to its blob: URL (see
-  // openAttachment below) — coming back via the phone's back gesture
-  // restores this page from the browser's back-forward cache exactly as it
-  // was mid-navigation, with the attachment modal still marked open but
-  // nothing around it re-rendered. Close it whenever the page becomes
-  // visible again after being backgrounded like that.
-  window.addEventListener("pageshow", (e) => {
-    if (e.persisted) attachmentModal.hidden = true;
-  });
 
   // ---- Share choice: new ticket, or attach the shared file to an existing one? ----
 

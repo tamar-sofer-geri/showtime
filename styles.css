@@ -497,6 +497,31 @@ html, body {
   display: block;
   pointer-events: none;
 }
+.attachment-pdf {
+  width: 92vw;
+  max-height: 88vh;
+  overflow-y: auto;
+  border-radius: 12px;
+  background: #4b4b52;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 10px;
+}
+.attachment-pdf canvas {
+  max-width: 100%;
+  height: auto;
+  display: block;
+  border-radius: 4px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.35);
+}
+.attachment-pdf-status {
+  color: #fff;
+  font-size: 14px;
+  padding: 24px;
+  text-align: center;
+}
 .attachment-close-btn {
   position: absolute;
   top: -14px;
