@@ -310,18 +310,16 @@
     const files = getTicketFiles(t);
     const thumbWrap = document.createElement("div");
     thumbWrap.className = "ticket-thumb-wrap";
-    if (files[0] && files[0].type && files[0].type.startsWith("image/")) {
-      const img = document.createElement("img");
-      img.className = "ticket-thumb";
-      img.alt = "";
-      img.src = trackUrl(URL.createObjectURL(files[0].blob));
-      thumbWrap.appendChild(img);
-    } else {
-      const ph = document.createElement("div");
-      ph.className = "ticket-thumb-placeholder";
-      ph.textContent = files.length ? "📄" : "🎫";
-      thumbWrap.appendChild(ph);
-    }
+    const ph = document.createElement("div");
+    ph.className = "ticket-thumb-placeholder";
+    ph.innerHTML =
+      '<svg viewBox="0 0 24 24" width="24" height="24" fill="none" xmlns="http://www.w3.org/2000/svg">' +
+      '<rect x="2" y="6" width="20" height="12" rx="3" fill="currentColor"/>' +
+      '<line x1="12" y1="6" x2="12" y2="18" stroke="#fff" stroke-width="1.5" stroke-dasharray="2 2"/>' +
+      '<circle cx="7" cy="12" r="1.1" fill="#fff"/>' +
+      '<circle cx="17" cy="12" r="1.1" fill="#fff"/>' +
+      "</svg>";
+    thumbWrap.appendChild(ph);
     if (files.length > 1) {
       const countBadge = document.createElement("span");
       countBadge.className = "ticket-thumb-count";
