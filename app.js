@@ -312,13 +312,7 @@
     thumbWrap.className = "ticket-thumb-wrap";
     const ph = document.createElement("div");
     ph.className = "ticket-thumb-placeholder";
-    ph.innerHTML =
-      '<svg viewBox="0 0 64 64" width="30" height="30" xmlns="http://www.w3.org/2000/svg">' +
-      '<path d="M14 24a4 4 0 0 1 4-4h28a4 4 0 0 1 4 4v2a3 3 0 0 0 0 6v2a4 4 0 0 1-4 4H18a4 4 0 0 1-4-4v-2a3 3 0 0 0 0-6v-2z" fill="currentColor"/>' +
-      '<line x1="32" y1="20" x2="32" y2="44" stroke="#fff" stroke-width="2" stroke-dasharray="3,3"/>' +
-      '<circle cx="24" cy="32" r="2.4" fill="#fff"/>' +
-      '<circle cx="40" cy="32" r="2.4" fill="#fff"/>' +
-      "</svg>";
+    ph.innerHTML = '<span class="ticket-thumb-emoji">🎟️</span>';
     thumbWrap.appendChild(ph);
     if (files.length > 1) {
       const countBadge = document.createElement("span");

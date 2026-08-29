@@ -140,10 +140,18 @@ html, body {
   height: 46px;
   border-radius: 10px;
   background: var(--accent);
-  color: var(--accent-ink);
   display: flex;
   align-items: center;
   justify-content: center;
+}
+.ticket-thumb-emoji {
+  font-size: 26px;
+  line-height: 1;
+  /* The 🎟️ emoji is a fixed-color glyph — filter is the only way to shift
+     its rendered hue toward the app's purple instead of its native
+     orange/red, while keeping the exact same ticket artwork used in the
+     tab bar. */
+  filter: hue-rotate(265deg) saturate(2.5) brightness(0.8);
 }
 .ticket-thumb-count {
   position: absolute;
