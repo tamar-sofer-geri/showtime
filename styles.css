@@ -142,6 +142,11 @@ html, body {
   object-fit: cover;
   background: var(--line);
   display: block;
+  /* Android Chrome shows its own long-press "Copy/Download/Share image"
+     menu when a touch-and-hold lands directly on an <img> — removing it
+     as a pointer target routes the touch to the card underneath instead,
+     so only our own long-press (open the attachment) fires. */
+  pointer-events: none;
 }
 .ticket-thumb-placeholder {
   width: 46px;
@@ -490,6 +495,14 @@ html, body {
   max-height: 88vh;
   border-radius: 12px;
   display: block;
+  pointer-events: none;
+}
+.attachment-card iframe {
+  width: 92vw;
+  height: 88vh;
+  border: none;
+  border-radius: 12px;
+  background: #fff;
 }
 .attachment-close-btn {
   position: absolute;

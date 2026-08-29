@@ -11,6 +11,8 @@ Tap **+** to add a ticket: show/event name, venue, date & time (24-hour, quarter
 
 All data — including attached photos/PDFs — is stored locally on-device in IndexedDB. Nothing leaves the device; there's no backend or sync (yet).
 
+PDF attachments render inline in the viewer (an `<iframe>` on a `blob:` URL) rather than linking out to a separate "Open PDF" step. Ticket-card thumbnails are also `pointer-events: none`, so a long-press routes entirely to the card (opening our own viewer) instead of also triggering Android Chrome's native "Copy/Download/Share image" menu on the `<img>` underneath.
+
 ## Reminders
 
 Reminders are in-app only for now: the Upcoming tab surfaces the soonest shows first and highlights anything within a week. Real push notifications (alerts even when the app isn't open) would need a backend and service-worker push subscription — a possible future addition, not built yet.

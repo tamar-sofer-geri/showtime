@@ -748,17 +748,19 @@
 
   const attachmentModal = document.getElementById("attachment-modal");
   const attachmentImg = document.getElementById("attachment-img");
-  const attachmentLink = document.getElementById("attachment-link");
+  const attachmentPdf = document.getElementById("attachment-pdf");
 
   function openAttachment(url, kind) {
     if (kind === "image") {
       attachmentImg.hidden = false;
       attachmentImg.src = url;
-      attachmentLink.hidden = true;
+      attachmentPdf.hidden = true;
+      attachmentPdf.src = "";
     } else {
       attachmentImg.hidden = true;
-      attachmentLink.hidden = false;
-      attachmentLink.href = url;
+      attachmentImg.src = "";
+      attachmentPdf.hidden = false;
+      attachmentPdf.src = url;
     }
     attachmentModal.hidden = false;
   }
