@@ -269,18 +269,23 @@
   // ---- Rendering ----
 
   const listUpcomingEl = document.getElementById("list-upcoming");
+  const listPlannedEl = document.getElementById("list-planned");
   const listPastEl = document.getElementById("list-past");
   const emptyUpcomingEl = document.getElementById("empty-upcoming");
+  const emptyPlannedEl = document.getElementById("empty-planned");
   const emptyPastEl = document.getElementById("empty-past");
 
   function render() {
-    const upcoming = tickets.filter(isUpcoming).sort((a, b) => ticketDateTime(a) - ticketDateTime(b));
-    const past = tickets.filter((t) => !isUpcoming(t)).sort((a, b) => ticketDateTime(b) - ticketDateTime(a));
+    const planned = tickets.filter((t) => t.planned).sort((a, b) => ticketDateTime(a) - ticketDateTime(b));
+    const upcoming = tickets.filter((t) => !t.planned && isUpcoming(t)).sort((a, b) => ticketDateTime(a) - ticketDateTime(b));
+    const past = tickets.filter((t) => !t.planned && !isUpcoming(t)).sort((a, b) => ticketDateTime(b) - ticketDateTime(a));
 
     renderList(listUpcomingEl, upcoming, true);
+    renderList(listPlannedEl, planned, false);
     renderList(listPastEl, past, false);
 
     emptyUpcomingEl.hidden = upcoming.length > 0;
+    emptyPlannedEl.hidden = planned.length > 0;
     emptyPastEl.hidden = past.length > 0;
   }
 
@@ -312,7 +317,11 @@
     thumbWrap.className = "ticket-thumb-wrap";
     const ph = document.createElement("div");
     ph.className = "ticket-thumb-placeholder";
-    ph.innerHTML = '<span class="ticket-thumb-emoji">🎟️</span>';
+    // Purple = a ticket is in hand; white silhouette = still just planned,
+    // no ticket secured yet — same emoji artwork either way, just recolored.
+    ph.innerHTML = t.planned
+      ? '<span class="ticket-thumb-emoji ticket-thumb-emoji-planned">🎟️</span>'
+      : '<span class="ticket-thumb-emoji">🎟️</span>';
     thumbWrap.appendChild(ph);
     if (files.length > 1) {
       const countBadge = document.createElement("span");
@@ -518,7 +527,11 @@
   // ---- Tabs ----
 
   const tabs = document.querySelectorAll(".tab");
-  const views = { upcoming: document.getElementById("view-upcoming"), past: document.getElementById("view-past") };
+  const views = {
+    upcoming: document.getElementById("view-upcoming"),
+    planned: document.getElementById("view-planned"),
+    past: document.getElementById("view-past"),
+  };
 
   tabs.forEach((tab) => {
     tab.addEventListener("click", () => {
@@ -642,6 +655,7 @@
     ticketForm.seat.value = t.seat || "";
     ticketForm.source.value = t.source || "";
     ticketForm.confirmation.value = t.confirmation || "";
+    ticketForm.planned.checked = !!t.planned;
     renderFileList();
     ticketModal.hidden = false;
   }
@@ -719,6 +733,7 @@
       seat: fd.get("seat").trim(),
       source: fd.get("source").trim(),
       confirmation: fd.get("confirmation").trim(),
+      planned: ticketForm.planned.checked,
       files: workingFiles.map((f) => ({ blob: f.blob, type: f.type, name: f.name })),
     };
 

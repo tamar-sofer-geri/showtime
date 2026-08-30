@@ -153,6 +153,12 @@ html, body {
      tab bar. */
   filter: hue-rotate(265deg) saturate(2.5) brightness(0.8);
 }
+.ticket-thumb-emoji-planned {
+  /* Same glyph, crushed to a solid white silhouette instead of recolored —
+     signals "planned, no ticket in hand yet" as visibly different from the
+     purple filled-in version above. */
+  filter: brightness(0) invert(1);
+}
 .ticket-thumb-count {
   position: absolute;
   bottom: -4px;
@@ -327,6 +333,22 @@ html, body {
 }
 .modal-card input:focus { border-color: var(--accent-strong); }
 .modal-card input[type="file"] { padding: 8px 4px; border: none; }
+.modal-card label.checkbox-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  color: var(--ink);
+  cursor: pointer;
+}
+.modal-card input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  margin: 0;
+  accent-color: var(--accent-strong);
+  flex: 0 0 auto;
+}
 
 .time-picker {
   display: flex;

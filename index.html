@@ -16,7 +16,7 @@
   <link rel="apple-touch-icon" href="apple-touch-icon.png?v=3" />
   <link rel="icon" href="icon.svg?v=3" type="image/svg+xml" />
   <title>Showtime</title>
-  <link rel="stylesheet" href="styles.css?v=14" />
+  <link rel="stylesheet" href="styles.css?v=15" />
 </head>
 <body>
   <div class="app">
@@ -31,6 +31,12 @@
       <section id="view-upcoming" class="view" aria-label="Upcoming">
         <ul id="list-upcoming" class="ticket-list" aria-live="polite"></ul>
         <p id="empty-upcoming" class="empty-state" hidden>No upcoming shows yet. Tap + to add a ticket.</p>
+      </section>
+
+      <!-- Planned view: want to attend, no ticket yet -->
+      <section id="view-planned" class="view" aria-label="Planned" hidden>
+        <ul id="list-planned" class="ticket-list" aria-live="polite"></ul>
+        <p id="empty-planned" class="empty-state" hidden>No planned shows yet. Tap + to add one.</p>
       </section>
 
       <!-- Past view -->
@@ -53,6 +59,10 @@
       <span class="tab-icon" aria-hidden="true">🎟️</span>
       <span>Upcoming</span>
     </button>
+    <button class="tab" type="button" data-view="planned">
+      <span class="tab-icon" aria-hidden="true">📌</span>
+      <span>Planned</span>
+    </button>
     <button class="tab" type="button" data-view="past">
       <span class="tab-icon" aria-hidden="true">🕓</span>
       <span>Past</span>
@@ -70,6 +80,11 @@
 
         <label for="venue-input">Venue</label>
         <input id="venue-input" name="venue" type="text" autocomplete="off" placeholder="e.g. Madison Square Garden" />
+
+        <label class="checkbox-row" for="planned-input">
+          <input id="planned-input" name="planned" type="checkbox" />
+          <span>Just planning to attend — no ticket yet</span>
+        </label>
 
         <div class="form-row">
           <div>
@@ -157,6 +172,6 @@
     </div>
   </div>
 
-  <script src="app.js?v=20"></script>
+  <script src="app.js?v=21"></script>
 </body>
 </html>
