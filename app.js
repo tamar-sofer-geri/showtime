@@ -259,14 +259,27 @@
     // or calendar entry often reads as just "Event name / optional details
     // / date & time / venue", one per line, with none of the ticketing-email
     // phrasing the heuristics above look for. Anchor on whichever line has
-    // the date: the line before everything is the name, the line right
-    // after is the venue.
+    // the date: the first non-junk line before it is the name, the line
+    // right after it is the venue.
     const dateLineIndex = rawLines.findIndex((l) => dateRe.test(l));
 
+    // Some share sources (e.g. Safari/Notes sharing selected text) prepend a
+    // line like "Included Link:" or the raw URL ahead of the actual content —
+    // skip lines like that rather than assuming line 0 is always the name.
+    function looksLikeShareJunk(l) {
+      return (
+        /^https?:\/\//i.test(l) ||
+        /^(including?|included)\s+link\b/i.test(l) ||
+        /^sent from\b/i.test(l) ||
+        /^shared (from|via)\b/i.test(l) ||
+        /^(dear|hi|hello)\b/i.test(l) ||
+        /[{}]/.test(l)
+      );
+    }
+
     if (!result.eventName && dateLineIndex > 0) {
-      const candidate = rawLines[0];
-      const looksLikeBoilerplate = /^(dear|hi|hello)\b/i.test(candidate) || /[{}]/.test(candidate);
-      if (candidate.length <= 80 && !looksLikeFilename(candidate) && !looksLikeBoilerplate) {
+      const candidate = rawLines.slice(0, dateLineIndex).find((l) => !looksLikeShareJunk(l));
+      if (candidate && candidate.length <= 80 && !looksLikeFilename(candidate)) {
         result.eventName = candidate;
       }
     }
