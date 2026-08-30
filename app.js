@@ -1035,7 +1035,7 @@
   function openPickerModal() {
     const sorted = [...tickets].sort((a, b) => ticketDateTime(b) - ticketDateTime(a));
     openListPicker(
-      "Add to which ticket?",
+      "Add to which event?",
       sorted.map((t) => ({
         primary: t.eventName,
         secondary: formatDate(t.date),

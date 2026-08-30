@@ -30,7 +30,7 @@
       <!-- Upcoming view -->
       <section id="view-upcoming" class="view" aria-label="Upcoming">
         <ul id="list-upcoming" class="ticket-list" aria-live="polite"></ul>
-        <p id="empty-upcoming" class="empty-state" hidden>No upcoming shows yet. Tap + to add a ticket.</p>
+        <p id="empty-upcoming" class="empty-state" hidden>No upcoming shows yet. Tap + to add an event.</p>
       </section>
 
       <!-- Planned view: want to attend, no ticket yet -->
@@ -151,12 +151,12 @@
   <div id="share-choice-modal" class="modal" hidden>
     <div class="modal-backdrop" data-share-choice-close></div>
     <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="share-choice-title">
-      <h2 id="share-choice-title">New or existing ticket?</h2>
+      <h2 id="share-choice-title">New or existing event?</h2>
       <div id="share-choice-preview" class="file-preview file-preview-static"></div>
-      <p class="modal-hint">Is this for a new ticket, or does it belong with one you already saved?</p>
+      <p class="modal-hint">Is this for a new event, or does it belong with one you already saved?</p>
       <div class="modal-actions modal-actions-stacked">
-        <button type="button" id="share-choice-existing-btn" class="btn btn-primary">Add to existing ticket</button>
-        <button type="button" id="share-choice-new-btn" class="btn btn-ghost-outline">Create new ticket</button>
+        <button type="button" id="share-choice-existing-btn" class="btn btn-primary">Add to existing event</button>
+        <button type="button" id="share-choice-new-btn" class="btn btn-ghost-outline">Create new event</button>
       </div>
     </div>
   </div>
@@ -165,7 +165,7 @@
   <div id="picker-modal" class="modal" hidden>
     <div class="modal-backdrop" data-picker-close></div>
     <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="picker-title">
-      <h2 id="picker-title">Attach to which ticket?</h2>
+      <h2 id="picker-title">Attach to which event?</h2>
       <ul id="picker-list" class="picker-list"></ul>
       <div class="modal-actions">
         <button type="button" class="btn btn-ghost" data-picker-close>Cancel</button>
@@ -183,6 +183,6 @@
     </div>
   </div>
 
-  <script src="app.js?v=23"></script>
+  <script src="app.js?v=24"></script>
 </body>
 </html>
