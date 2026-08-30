@@ -14,7 +14,11 @@
     </linearGradient>
   </defs>
 
-  <rect width="64" height="64" rx="14" fill="url(#bg)"/>
+  <!-- Full-bleed square, no rounding of our own — Android applies its own
+       adaptive-icon mask (circle/squircle/etc.) on top, and a pre-rounded
+       shape here leaves transparent gaps between our corners and its mask
+       that render as white. -->
+  <rect width="64" height="64" fill="url(#bg)"/>
   <circle cx="32" cy="27" r="22" fill="url(#glow)"/>
 
   <!-- marquee bulbs -->
@@ -29,7 +33,7 @@
 
   <!-- Hollywood-style star -->
   <path
-    d="M32,17 L35.53,27.15 L46.27,27.37 L37.71,33.85 L40.82,44.14 L32,38 L23.18,44.14 L26.29,33.85 L17.73,27.37 L28.47,27.15 Z"
+    d="M32,14.5 L36.12,26.34 L48.64,26.59 L38.66,34.16 L42.29,46.16 L32,39 L21.71,46.16 L25.34,34.16 L15.36,26.59 L27.88,26.34 Z"
     fill="url(#star)" stroke="#c2410c" stroke-width="1" stroke-linejoin="round"
   />
 </svg>
