@@ -59,8 +59,17 @@ Then open <http://localhost:8000>.
 | `app.js` | IndexedDB storage (tickets + attachments), rendering, countdown logic, shared-content parsing |
 | `sw.js` | Service worker for offline app-shell caching and handling incoming shares |
 | `share-target/index.html` | Static fallback if a share reaches the app before the service worker is active |
-| `manifest.webmanifest`, `icon.svg`, `apple-touch-icon.png` | Home-screen install support, share target registration |
+| `manifest.webmanifest`, `icon.svg`, `apple-touch-icon.png`, `icon-maskable.svg`/`.png` | Home-screen install support, share target registration |
 
 ## Bumping the cache version
 
 `sw.js` caches `styles.css`, `app.js`, etc. by their `?v=N` query string. When you change either file, bump the `?v=` in both `index.html` and the `ASSETS` list in `sw.js`, and bump `CACHE` in `sw.js` — otherwise installed/offline users may keep seeing the old version.
+
+## The Android home-screen icon specifically
+
+Two things had to be true before the icon looked right on a real device, neither obvious from a desktop browser:
+
+1. **No self-rounding.** `icon.svg`'s background used to be a rounded rect (`rx="14"`). Android applies its own adaptive-icon mask (a circle, on most launchers) regardless of what shape you hand it — a pre-rounded icon leaves a gap between its own corners and the mask's, which renders as white. The background is a full-bleed square now; let the OS do the only actual rounding.
+2. **A `purpose: "maskable"` icon.** Without one, Chrome doesn't trust that an icon is safe to bleed to the mask's edges, so it insets it and pads the remainder with white — exactly the "purple square inside a white circle" look. `icon-maskable.svg`/`.png` is a separate, simpler variant (background + star, no marquee bulbs — there wasn't safe-zone room for them at a star worth keeping) with everything kept inside Android's ~61%-of-half-width safe-zone circle, so it can bleed fully without clipping under any mask shape. `icon.svg` itself is unchanged for its other uses (header logo, favicon) where none of this applies.
+
+Installed-app icons don't refresh from a reload or even a service-worker update — Android caches the generated icon separately. Removing the app from the home screen and re-adding it is the reliable way to see an icon change take effect.
