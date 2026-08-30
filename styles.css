@@ -130,6 +130,24 @@ html, body {
   font-size: 14px;
 }
 
+.ticket-row-move-bg {
+  position: absolute;
+  inset: 0;
+  border-radius: 14px;
+  background: var(--accent-strong);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding-right: 22px;
+  font-weight: 700;
+  font-size: 14px;
+  /* Fully overlaps .ticket-row-delete-bg (both inset:0) — hidden by
+     default and only shown during an active left-drag (see
+     wireCardGestures), so only one background ever paints at a time. */
+  visibility: hidden;
+}
+
 .ticket-card {
   position: relative;
   display: flex;

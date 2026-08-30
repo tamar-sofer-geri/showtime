@@ -536,11 +536,13 @@
   const emptyPlannedEl = document.getElementById("empty-planned");
   const emptyPastEl = document.getElementById("empty-past");
 
-  // A ticket is "planned" purely by not having any attached file yet — no
-  // separate flag to keep in sync. Attach a photo/PDF (the actual ticket)
-  // and it moves itself into Upcoming/Past based on its date.
+  // A ticket is "planned" by not having any attached file yet — attach a
+  // photo/PDF (the actual ticket) and it moves itself into Upcoming/Past
+  // based on its date. ticketConfirmed is the manual escape hatch for
+  // tickets that can never have a file (e.g. a vendor's live rotating
+  // barcode, only viewable in their app) — left-swipe in Planned sets it.
   function isPlanned(t) {
-    return getTicketFiles(t).length === 0;
+    return getTicketFiles(t).length === 0 && !t.ticketConfirmed;
   }
 
   function render() {
@@ -548,23 +550,23 @@
     const upcoming = tickets.filter((t) => !isPlanned(t) && isUpcoming(t)).sort((a, b) => ticketDateTime(a) - ticketDateTime(b));
     const past = tickets.filter((t) => !isPlanned(t) && !isUpcoming(t)).sort((a, b) => ticketDateTime(b) - ticketDateTime(a));
 
-    renderList(listUpcomingEl, upcoming, true);
-    renderList(listPlannedEl, planned, false);
-    renderList(listPastEl, past, false);
+    renderList(listUpcomingEl, upcoming, "upcoming");
+    renderList(listPlannedEl, planned, "planned");
+    renderList(listPastEl, past, "past");
 
     emptyUpcomingEl.hidden = upcoming.length > 0;
     emptyPlannedEl.hidden = planned.length > 0;
     emptyPastEl.hidden = past.length > 0;
   }
 
-  function renderList(el, items, isUpcomingList) {
+  function renderList(el, items, listKind) {
     el.innerHTML = "";
     for (const t of items) {
-      el.appendChild(renderCard(t, isUpcomingList));
+      el.appendChild(renderCard(t, listKind));
     }
   }
 
-  function renderCard(t, isUpcomingList) {
+  function renderCard(t, listKind) {
     const li = document.createElement("li");
     li.className = "ticket-row-wrap";
 
@@ -574,26 +576,43 @@
     deleteBg.setAttribute("aria-hidden", "true");
     li.appendChild(deleteBg);
 
+    const canMoveUpcoming = listKind === "planned";
+    let moveBg = null;
+    if (canMoveUpcoming) {
+      moveBg = document.createElement("div");
+      moveBg.className = "ticket-row-move-bg";
+      moveBg.textContent = "Move to Upcoming";
+      moveBg.setAttribute("aria-hidden", "true");
+      li.appendChild(moveBg);
+    }
+
     const files = getTicketFiles(t);
-    const planned = files.length === 0;
+    const planned = isPlanned(t);
     const tier = planned ? reminderTier(t) : null;
 
     const card = document.createElement("div");
-    const soon = (isUpcomingList && daysUntil(t) <= 7) || !!tier;
+    const soon = (listKind === "upcoming" && daysUntil(t) <= 7) || !!tier;
     card.className = "ticket-card" + (soon ? " is-soon" : "");
     card.tabIndex = 0;
-    wireCardGestures(card, t);
+    wireCardGestures(card, t, canMoveUpcoming, moveBg);
 
     const thumbWrap = document.createElement("div");
     thumbWrap.className = "ticket-thumb-wrap";
     const ph = document.createElement("div");
     ph.className = "ticket-thumb-placeholder";
-    // Purple = a ticket is in hand; white silhouette = still just planned,
-    // no ticket secured yet — same emoji artwork either way, just recolored.
-    ph.innerHTML = files.length === 0
+    // Purple = a ticket is in hand (a real file, or manually confirmed via
+    // ticketConfirmed); white silhouette = still just planned — same emoji
+    // artwork either way, just recolored.
+    ph.innerHTML = planned
       ? '<span class="ticket-thumb-emoji ticket-thumb-emoji-planned">🎟️</span>'
       : '<span class="ticket-thumb-emoji">🎟️</span>';
     thumbWrap.appendChild(ph);
+    if (!files.length && t.ticketLink) {
+      const linkBadge = document.createElement("span");
+      linkBadge.className = "ticket-thumb-count";
+      linkBadge.textContent = "🔗";
+      thumbWrap.appendChild(linkBadge);
+    }
     if (files.length > 1) {
       const countBadge = document.createElement("span");
       countBadge.className = "ticket-thumb-count";
@@ -647,13 +666,16 @@
   }
 
   // Short tap opens Edit; press-and-hold jumps straight to the attached
-  // ticket file; a right swipe past 40% of the card's width deletes it
-  // (with undo). All three share one pointer-gesture state machine so they
-  // can't fire on top of each other.
+  // ticket file (or opens ticketLink if there's no file); a right swipe
+  // past 40% of the card's width deletes it (with undo); in the Planned
+  // list only, a left swipe past 40% marks it ticketed and moves it to
+  // Upcoming (with undo) — for tickets that can never have a file attached.
+  // All of this shares one pointer-gesture state machine so nothing fires
+  // on top of anything else.
   const LONG_PRESS_MS = 500;
   const GESTURE_MOVE_THRESHOLD = 10;
 
-  function wireCardGestures(card, t) {
+  function wireCardGestures(card, t, canMoveUpcoming, moveBg) {
     let pressTimer = null;
     let longPressFired = false;
     let wasSwipe = false;
@@ -711,8 +733,12 @@
         }
       }
 
-      currentDx = Math.max(0, Math.min(dx, card.offsetWidth));
+      const minDx = canMoveUpcoming ? -card.offsetWidth : 0;
+      currentDx = Math.max(minDx, Math.min(dx, card.offsetWidth));
       card.style.transform = `translateX(${currentDx}px)`;
+      // The two backgrounds fully overlap (both inset:0), so only the one
+      // for the current drag direction should ever actually paint.
+      if (moveBg) moveBg.style.visibility = currentDx < 0 ? "visible" : "hidden";
       e.preventDefault();
     });
 
@@ -727,9 +753,12 @@
       if (currentDx > threshold) {
         card.style.transform = "translateX(100%)";
         setTimeout(() => swipeDeleteTicket(t), 150);
+      } else if (canMoveUpcoming && currentDx < -threshold) {
+        card.style.transform = "translateX(-100%)";
+        setTimeout(() => swipeMoveToUpcoming(t), 150);
       } else {
         card.style.transform = "translateX(0)";
-        // Snapped back rather than deleting — don't let a stale "this was a
+        // Snapped back rather than acting — don't let a stale "this was a
         // swipe" flag block a later click that arrives with no pointerdown
         // of its own (e.g. keyboard Enter/Space activation).
         wasSwipe = false;
@@ -749,17 +778,21 @@
     });
   }
 
-  // ---- Swipe-to-delete with undo ----
+  // ---- Swipe-to-delete / swipe-to-move-to-upcoming, both with undo ----
+  //
+  // Both are the same shape (optimistic list mutation, 3-second undo bar,
+  // real persistence deferred until the window elapses) so they share one
+  // pending-action slot rather than two parallel copies of the same logic.
 
   const undoBar = document.getElementById("undo-bar");
   const undoLabel = document.getElementById("undo-label");
   const undoBtn = document.getElementById("undo-btn");
   const UNDO_WINDOW_MS = 3000;
 
-  let pendingDelete = null; // { ticket, timer }
+  let pendingAction = null; // { type: "delete" | "moveUpcoming", ticket, timer }
 
-  function showUndoBar(name) {
-    undoLabel.textContent = `Deleted "${name}"`;
+  function showUndoBar(label) {
+    undoLabel.textContent = label;
     undoBar.hidden = false;
   }
 
@@ -767,43 +800,67 @@
     undoBar.hidden = true;
   }
 
-  async function finalizePendingDelete() {
-    if (!pendingDelete) return;
-    const { ticket, timer } = pendingDelete;
+  async function finalizePendingAction() {
+    if (!pendingAction) return;
+    const { type, ticket, timer } = pendingAction;
     clearTimeout(timer);
-    pendingDelete = null;
+    pendingAction = null;
     hideUndoBar();
-    if (getMode() === "cloud") {
-      const paths = getTicketFiles(ticket).map((f) => f.path).filter(Boolean);
-      await deleteStoragePaths(paths);
+    if (type === "delete") {
+      if (getMode() === "cloud") {
+        const paths = getTicketFiles(ticket).map((f) => f.path).filter(Boolean);
+        await deleteStoragePaths(paths);
+      }
+      await deleteTicket(ticket.id);
+    } else if (type === "moveUpcoming") {
+      await putTicket({ ...ticket, ticketConfirmed: true });
     }
-    await deleteTicket(ticket.id);
   }
 
   function swipeDeleteTicket(ticket) {
-    finalizePendingDelete();
+    finalizePendingAction();
     tickets = tickets.filter((t) => t.id !== ticket.id);
     render();
-    showUndoBar(ticket.eventName);
-    pendingDelete = { ticket, timer: setTimeout(finalizePendingDelete, UNDO_WINDOW_MS) };
+    showUndoBar(`Deleted "${ticket.eventName}"`);
+    pendingAction = { type: "delete", ticket, timer: setTimeout(finalizePendingAction, UNDO_WINDOW_MS) };
   }
 
-  function undoDelete() {
-    if (!pendingDelete) return;
-    clearTimeout(pendingDelete.timer);
-    const { ticket } = pendingDelete;
-    pendingDelete = null;
-    tickets.push(ticket);
+  // For a ticket whose "attachment" can only ever live in the vendor's own
+  // app (e.g. a rotating live barcode) — there's genuinely no file to attach,
+  // so it would otherwise sit in Planned forever. This is a manual override:
+  // ticketConfirmed short-circuits isPlanned() the same way a real file does.
+  function swipeMoveToUpcoming(ticket) {
+    finalizePendingAction();
+    const updated = { ...ticket, ticketConfirmed: true };
+    tickets = tickets.map((t) => (t.id === ticket.id ? updated : t));
+    render();
+    showUndoBar(`Moved "${ticket.eventName}" to Upcoming`);
+    pendingAction = { type: "moveUpcoming", ticket, timer: setTimeout(finalizePendingAction, UNDO_WINDOW_MS) };
+  }
+
+  function undoPendingAction() {
+    if (!pendingAction) return;
+    clearTimeout(pendingAction.timer);
+    const { type, ticket } = pendingAction;
+    pendingAction = null;
+    if (type === "delete") {
+      tickets.push(ticket);
+    } else {
+      tickets = tickets.map((t) => (t.id === ticket.id ? ticket : t));
+    }
     render();
     hideUndoBar();
   }
 
-  undoBtn.addEventListener("click", undoDelete);
+  undoBtn.addEventListener("click", undoPendingAction);
 
   function openAttachmentForTicket(t) {
     const files = getTicketFiles(t);
-    if (!files.length) return;
-    openAttachmentCarousel(files, 0);
+    if (files.length) {
+      openAttachmentCarousel(files, 0);
+    } else if (t.ticketLink) {
+      window.open(t.ticketLink, "_blank", "noopener");
+    }
   }
 
   // ---- Tabs ----
@@ -909,6 +966,7 @@
       seat: ticketForm.seat.value,
       source: ticketForm.source.value,
       confirmation: ticketForm.confirmation.value,
+      ticketLink: ticketForm.ticketLink.value,
       files: workingFiles.map((f) => `${f.name}|${f.type}|${f.blob ? f.blob.size : f.path || ""}`),
     });
   }
@@ -934,6 +992,7 @@
       ticketForm.seat.value = prefill.seat || "";
       ticketForm.source.value = prefill.source || "";
       ticketForm.confirmation.value = prefill.confirmation || "";
+      ticketForm.ticketLink.value = prefill.ticketLink || "";
       if (prefill.fileBlob) {
         workingFiles.push({ blob: prefill.fileBlob, name: prefill.fileName, type: prefill.fileType });
       }
@@ -961,6 +1020,7 @@
     ticketForm.seat.value = t.seat || "";
     ticketForm.source.value = t.source || "";
     ticketForm.confirmation.value = t.confirmation || "";
+    ticketForm.ticketLink.value = t.ticketLink || "";
     modalSnapshot = snapshotFormState();
     renderFileList();
     ticketModal.hidden = false;
@@ -1053,6 +1113,7 @@
     syncHiddenTime();
     const fd = new FormData(ticketForm);
     const ticketId = editingId || crypto.randomUUID();
+    const existing = editingId ? tickets.find((x) => x.id === editingId) : null;
 
     ticketSaveBtn.disabled = true;
     ticketSaveBtn.textContent = "Saving…";
@@ -1072,6 +1133,10 @@
         seat: fd.get("seat").trim(),
         source: fd.get("source").trim(),
         confirmation: fd.get("confirmation").trim(),
+        ticketLink: fd.get("ticketLink").trim(),
+        // Not a form field — set only via the left-swipe-to-upcoming
+        // gesture in Planned, so carry it forward rather than dropping it.
+        ticketConfirmed: !!(existing && existing.ticketConfirmed),
         files,
       };
 
