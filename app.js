@@ -576,25 +576,31 @@
     deleteBg.setAttribute("aria-hidden", "true");
     li.appendChild(deleteBg);
 
-    const canMoveUpcoming = listKind === "planned";
-    let moveBg = null;
-    if (canMoveUpcoming) {
-      moveBg = document.createElement("div");
-      moveBg.className = "ticket-row-move-bg";
-      moveBg.textContent = "Move to Upcoming";
-      moveBg.setAttribute("aria-hidden", "true");
-      li.appendChild(moveBg);
-    }
-
     const files = getTicketFiles(t);
     const planned = isPlanned(t);
     const tier = planned ? reminderTier(t) : null;
+
+    // Left swipe: Planned -> Upcoming always (the ticketConfirmed escape
+    // hatch); Upcoming -> Planned only undoes that same override — a ticket
+    // with a real file attached can't be swiped back, since "un-planning"
+    // it would mean discarding the attachment, too big a step for a swipe.
+    const canMoveToUpcoming = listKind === "planned";
+    const canMoveToPlanned = listKind === "upcoming" && !!t.ticketConfirmed && files.length === 0;
+    const canSwipeLeft = canMoveToUpcoming || canMoveToPlanned;
+    let moveBg = null;
+    if (canSwipeLeft) {
+      moveBg = document.createElement("div");
+      moveBg.className = "ticket-row-move-bg";
+      moveBg.textContent = canMoveToUpcoming ? "Move to Upcoming" : "Move to Planned";
+      moveBg.setAttribute("aria-hidden", "true");
+      li.appendChild(moveBg);
+    }
 
     const card = document.createElement("div");
     const soon = (listKind === "upcoming" && daysUntil(t) <= 7) || !!tier;
     card.className = "ticket-card" + (soon ? " is-soon" : "");
     card.tabIndex = 0;
-    wireCardGestures(card, t, canMoveUpcoming, moveBg);
+    wireCardGestures(card, t, canSwipeLeft, moveBg, canMoveToUpcoming ? swipeMoveToUpcoming : swipeMoveToPlanned);
 
     const thumbWrap = document.createElement("div");
     thumbWrap.className = "ticket-thumb-wrap";
@@ -667,15 +673,15 @@
 
   // Short tap opens Edit; press-and-hold jumps straight to the attached
   // ticket file (or opens ticketLink if there's no file); a right swipe
-  // past 40% of the card's width deletes it (with undo); in the Planned
-  // list only, a left swipe past 40% marks it ticketed and moves it to
-  // Upcoming (with undo) — for tickets that can never have a file attached.
-  // All of this shares one pointer-gesture state machine so nothing fires
-  // on top of anything else.
+  // past 40% of the card's width deletes it (with undo); where applicable,
+  // a left swipe past 40% fires onSwipeLeft (with undo) — Planned ->
+  // Upcoming for a ticket that can never have a file, or the reverse for
+  // one moved there that way. All of this shares one pointer-gesture state
+  // machine so nothing fires on top of anything else.
   const LONG_PRESS_MS = 500;
   const GESTURE_MOVE_THRESHOLD = 10;
 
-  function wireCardGestures(card, t, canMoveUpcoming, moveBg) {
+  function wireCardGestures(card, t, canSwipeLeft, moveBg, onSwipeLeft) {
     let pressTimer = null;
     let longPressFired = false;
     let wasSwipe = false;
@@ -733,7 +739,7 @@
         }
       }
 
-      const minDx = canMoveUpcoming ? -card.offsetWidth : 0;
+      const minDx = canSwipeLeft ? -card.offsetWidth : 0;
       currentDx = Math.max(minDx, Math.min(dx, card.offsetWidth));
       card.style.transform = `translateX(${currentDx}px)`;
       // The two backgrounds fully overlap (both inset:0), so only the one
@@ -753,9 +759,9 @@
       if (currentDx > threshold) {
         card.style.transform = "translateX(100%)";
         setTimeout(() => swipeDeleteTicket(t), 150);
-      } else if (canMoveUpcoming && currentDx < -threshold) {
+      } else if (canSwipeLeft && currentDx < -threshold) {
         card.style.transform = "translateX(-100%)";
-        setTimeout(() => swipeMoveToUpcoming(t), 150);
+        setTimeout(() => onSwipeLeft(t), 150);
       } else {
         card.style.transform = "translateX(0)";
         // Snapped back rather than acting — don't let a stale "this was a
@@ -814,6 +820,8 @@
       await deleteTicket(ticket.id);
     } else if (type === "moveUpcoming") {
       await putTicket({ ...ticket, ticketConfirmed: true });
+    } else if (type === "movePlanned") {
+      await putTicket({ ...ticket, ticketConfirmed: false });
     }
   }
 
@@ -836,6 +844,19 @@
     render();
     showUndoBar(`Moved "${ticket.eventName}" to Upcoming`);
     pendingAction = { type: "moveUpcoming", ticket, timer: setTimeout(finalizePendingAction, UNDO_WINDOW_MS) };
+  }
+
+  // The reverse of swipeMoveToUpcoming — only reachable from a card that
+  // got to Upcoming via ticketConfirmed with no file attached (renderCard
+  // only wires this in for those), so there's never a real attachment to
+  // reconcile: clearing the flag is the whole move.
+  function swipeMoveToPlanned(ticket) {
+    finalizePendingAction();
+    const updated = { ...ticket, ticketConfirmed: false };
+    tickets = tickets.map((t) => (t.id === ticket.id ? updated : t));
+    render();
+    showUndoBar(`Moved "${ticket.eventName}" to Planned`);
+    pendingAction = { type: "movePlanned", ticket, timer: setTimeout(finalizePendingAction, UNDO_WINDOW_MS) };
   }
 
   function undoPendingAction() {
