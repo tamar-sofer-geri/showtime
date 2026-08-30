@@ -36,7 +36,7 @@
     });
   }
 
-  function getAllTickets() {
+  function getAllLocalTickets() {
     return withStore(STORE_TICKETS, "readonly", (store) => {
       return new Promise((resolve, reject) => {
         const req = store.getAll();
@@ -46,12 +46,197 @@
     }).then((p) => p);
   }
 
-  function putTicket(ticket) {
+  function putLocalTicket(ticket) {
     return withStore(STORE_TICKETS, "readwrite", (store) => store.put(ticket));
   }
 
-  function deleteTicket(id) {
+  function deleteLocalTicket(id) {
     return withStore(STORE_TICKETS, "readwrite", (store) => store.delete(id));
+  }
+
+  // ---- Family sharing (Firebase) ----
+  //
+  // Showtime is a public static site with no login wall, so a device has to
+  // pick a mode before it touches any data:
+  //   "local" — original behavior, everything in this device's IndexedDB,
+  //             Firebase never contacts the network.
+  //   "cloud" — this device's tickets live in Firestore under
+  //             families/{code}/tickets, shared live with anyone else who
+  //             has the same code (a "shared secret" like a Google Doc
+  //             link — there's no per-person login).
+  // Mode + code are device config, not app data, so they live in
+  // localStorage rather than IndexedDB.
+
+  const LS_MODE_KEY = "showtime-mode";
+  const LS_FAMILY_CODE_KEY = "showtime-family-code";
+
+  const FIREBASE_CONFIG = {
+    apiKey: "AIzaSyC-nCkVIGR5T2Hn6wYkm3sdqeNQFKXS1-c",
+    authDomain: "showtime-family.firebaseapp.com",
+    projectId: "showtime-family",
+    storageBucket: "showtime-family.firebasestorage.app",
+    messagingSenderId: "256408852477",
+    appId: "1:256408852477:web:de112bb28da5fcf5fd6b94",
+  };
+
+  function getMode() {
+    return localStorage.getItem(LS_MODE_KEY);
+  }
+
+  function getFamilyCode() {
+    return localStorage.getItem(LS_FAMILY_CODE_KEY);
+  }
+
+  function setFamily(mode, code) {
+    localStorage.setItem(LS_MODE_KEY, mode);
+    if (code) localStorage.setItem(LS_FAMILY_CODE_KEY, code);
+    else localStorage.removeItem(LS_FAMILY_CODE_KEY);
+  }
+
+  // Excludes visually-ambiguous characters (0/O, 1/I/L) since this gets
+  // typed by hand on a phone keyboard.
+  const FAMILY_CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
+  function generateFamilyCode() {
+    const bytes = crypto.getRandomValues(new Uint8Array(8));
+    return [...bytes].map((b) => FAMILY_CODE_ALPHABET[b % FAMILY_CODE_ALPHABET.length]).join("");
+  }
+
+  let firestoreDb = null;
+  let firebaseStorage = null;
+  let authReadyPromise = null;
+
+  function ensureFirebase() {
+    if (!firestoreDb) {
+      firebase.initializeApp(FIREBASE_CONFIG);
+      firestoreDb = firebase.firestore();
+      firestoreDb.enablePersistence({ synchronizeTabs: true }).catch(() => {
+        // Multiple tabs or an unsupported browser — app still works, just
+        // without the offline cache surviving a full restart.
+      });
+      firebaseStorage = firebase.storage();
+    }
+    if (!authReadyPromise) {
+      authReadyPromise = new Promise((resolve, reject) => {
+        firebase.auth().onAuthStateChanged((user) => {
+          if (user) resolve(user);
+        });
+        firebase.auth().signInAnonymously().catch(reject);
+      });
+    }
+    return authReadyPromise;
+  }
+
+  function familyDoc(code) {
+    return firestoreDb.collection("families").doc(code);
+  }
+
+  function familyTicketsCollection() {
+    return familyDoc(getFamilyCode()).collection("tickets");
+  }
+
+  // Resolves true/false rather than throwing, so a mistyped join code reads
+  // as "not found" instead of a raw permission error.
+  async function familyExists(code) {
+    await ensureFirebase();
+    const snap = await familyDoc(code).get();
+    return snap.exists;
+  }
+
+  async function createFamily() {
+    await ensureFirebase();
+    const code = generateFamilyCode();
+    await familyDoc(code).set({ createdAt: firebase.firestore.FieldValue.serverTimestamp() });
+    setFamily("cloud", code);
+    return code;
+  }
+
+  async function joinFamily(code) {
+    const exists = await familyExists(code);
+    if (!exists) return false;
+    setFamily("cloud", code);
+    return true;
+  }
+
+  function useLocalOnly() {
+    setFamily("local", null);
+  }
+
+  async function putTicket(ticket) {
+    if (getMode() === "cloud") {
+      await ensureFirebase();
+      await familyTicketsCollection().doc(ticket.id).set(ticket);
+      return;
+    }
+    return putLocalTicket(ticket);
+  }
+
+  async function deleteTicket(id) {
+    if (getMode() === "cloud") {
+      await ensureFirebase();
+      await familyTicketsCollection().doc(id).delete();
+      return;
+    }
+    return deleteLocalTicket(id);
+  }
+
+  // Uploads any not-yet-uploaded working files (fresh picks/shares, which
+  // only ever have a .blob) to Storage under this ticket, leaving
+  // already-uploaded files (.url/.path, no .blob — loaded back from a
+  // previous save) untouched. Local mode never calls this.
+  async function uploadWorkingFilesForCloud(ticketId, files) {
+    await ensureFirebase();
+    const result = [];
+    for (const f of files) {
+      if (!f.blob) {
+        result.push({ url: f.url, path: f.path, name: f.name, type: f.type });
+        continue;
+      }
+      const path = `families/${getFamilyCode()}/attachments/${ticketId}/${crypto.randomUUID()}-${f.name || "file"}`;
+      const ref = firebaseStorage.ref(path);
+      await ref.put(f.blob, f.type ? { contentType: f.type } : undefined);
+      const url = await ref.getDownloadURL();
+      result.push({ url, path, name: f.name, type: f.type });
+    }
+    return result;
+  }
+
+  async function deleteStoragePaths(paths) {
+    if (!paths.length) return;
+    await ensureFirebase();
+    await Promise.all(
+      paths.map((path) => firebaseStorage.ref(path).delete().catch(() => {}))
+    );
+  }
+
+  let unsubscribeTicketsListener = null;
+
+  // Cloud mode keeps one live listener running for the whole session rather
+  // than re-fetching on every reload() call — that's what makes another
+  // family member's change show up here without a manual refresh. Resolves
+  // once the first snapshot (local cache or server) has arrived, so startup
+  // can wait for `tickets` to be populated before deciding what to render.
+  function startTicketsSync() {
+    if (unsubscribeTicketsListener) return Promise.resolve();
+    return new Promise((resolve) => {
+      let settled = false;
+      const settle = () => {
+        if (!settled) {
+          settled = true;
+          resolve();
+        }
+      };
+      unsubscribeTicketsListener = familyTicketsCollection().onSnapshot(
+        (snap) => {
+          tickets = snap.docs.map((d) => d.data());
+          render();
+          settle();
+        },
+        (err) => {
+          console.error("Family sync error", err);
+          settle();
+        }
+      );
+    });
   }
 
   function takePendingShare() {
@@ -312,8 +497,9 @@
   let tickets = [];
   let currentView = "upcoming";
   let editingId = null;
-  let workingFiles = []; // [{ blob, name, type }] — the modal's current attachment list while open
+  let workingFiles = []; // [{ blob, name, type }] (freshly picked) or [{ url, path, name, type }] (already in cloud Storage)
   let modalSnapshot = ""; // form state as of when the modal opened, to detect unsaved changes on close
+  let filesPendingStorageDeletion = []; // Storage paths removed from workingFiles this edit, deleted on Save (cloud mode)
   const objectUrls = [];
 
   function trackUrl(url) {
@@ -332,6 +518,13 @@
     if (t.files && t.files.length) return t.files;
     if (t.fileBlob) return [{ blob: t.fileBlob, type: t.fileType, name: t.fileName }];
     return [];
+  }
+
+  // A file entry is either a freshly-picked local blob (.blob) or an
+  // already-uploaded cloud file (.url, no .blob) — this is the one place
+  // that turns either into something an <img>/etc. can point at.
+  function fileImageSrc(f) {
+    return f.blob ? trackUrl(URL.createObjectURL(f.blob)) : f.url;
   }
 
   // ---- Rendering ----
@@ -580,6 +773,10 @@
     clearTimeout(timer);
     pendingDelete = null;
     hideUndoBar();
+    if (getMode() === "cloud") {
+      const paths = getTicketFiles(ticket).map((f) => f.path).filter(Boolean);
+      await deleteStoragePaths(paths);
+    }
     await deleteTicket(ticket.id);
   }
 
@@ -712,7 +909,7 @@
       seat: ticketForm.seat.value,
       source: ticketForm.source.value,
       confirmation: ticketForm.confirmation.value,
-      files: workingFiles.map((f) => `${f.name}|${f.type}|${f.blob ? f.blob.size : ""}`),
+      files: workingFiles.map((f) => `${f.name}|${f.type}|${f.blob ? f.blob.size : f.path || ""}`),
     });
   }
 
@@ -723,6 +920,7 @@
   function openAddModal(prefill) {
     editingId = null;
     workingFiles = [];
+    filesPendingStorageDeletion = [];
     ticketModalTitle.textContent = "Add event";
     ticketForm.reset();
     setTimeSelects("");
@@ -752,6 +950,7 @@
     if (!t) return;
     editingId = id;
     workingFiles = getTicketFiles(t).slice();
+    filesPendingStorageDeletion = [];
     ticketModalTitle.textContent = "Edit event";
     ticketForm.reset();
     ticketForm.eventName.value = t.eventName || "";
@@ -779,6 +978,7 @@
     ticketModal.hidden = true;
     editingId = null;
     workingFiles = [];
+    filesPendingStorageDeletion = [];
   }
 
   function renderFileList() {
@@ -791,7 +991,7 @@
       if (f.type && f.type.startsWith("image/")) {
         thumb = document.createElement("img");
         thumb.alt = "";
-        thumb.src = trackUrl(URL.createObjectURL(f.blob));
+        thumb.src = fileImageSrc(f);
       } else {
         thumb = document.createElement("div");
         thumb.className = "file-list-icon";
@@ -812,7 +1012,8 @@
       removeBtn.setAttribute("aria-label", "Remove attachment");
       removeBtn.textContent = "×";
       removeBtn.addEventListener("click", () => {
-        workingFiles.splice(i, 1);
+        const [removed] = workingFiles.splice(i, 1);
+        if (removed.path) filesPendingStorageDeletion.push(removed.path);
         renderFileList();
       });
       row.appendChild(removeBtn);
@@ -845,27 +1046,46 @@
     unsavedModal.hidden = true;
   });
 
+  const ticketSaveBtn = ticketForm.querySelector('button[type="submit"]');
+
   ticketForm.addEventListener("submit", async (e) => {
     e.preventDefault();
     syncHiddenTime();
     const fd = new FormData(ticketForm);
+    const ticketId = editingId || crypto.randomUUID();
 
-    const ticket = {
-      id: editingId || crypto.randomUUID(),
-      eventName: fd.get("eventName").trim(),
-      venue: fd.get("venue").trim(),
-      date: fd.get("date"),
-      time: fd.get("time"),
-      price: fd.get("price") ? Number(fd.get("price")) : "",
-      seat: fd.get("seat").trim(),
-      source: fd.get("source").trim(),
-      confirmation: fd.get("confirmation").trim(),
-      files: workingFiles.map((f) => ({ blob: f.blob, type: f.type, name: f.name })),
-    };
+    ticketSaveBtn.disabled = true;
+    ticketSaveBtn.textContent = "Saving…";
+    try {
+      const files =
+        getMode() === "cloud"
+          ? await uploadWorkingFilesForCloud(ticketId, workingFiles)
+          : workingFiles.map((f) => ({ blob: f.blob, type: f.type, name: f.name }));
 
-    await putTicket(ticket);
-    await reload();
-    closeTicketModal();
+      const ticket = {
+        id: ticketId,
+        eventName: fd.get("eventName").trim(),
+        venue: fd.get("venue").trim(),
+        date: fd.get("date"),
+        time: fd.get("time"),
+        price: fd.get("price") ? Number(fd.get("price")) : "",
+        seat: fd.get("seat").trim(),
+        source: fd.get("source").trim(),
+        confirmation: fd.get("confirmation").trim(),
+        files,
+      };
+
+      await putTicket(ticket);
+      if (getMode() === "cloud") await deleteStoragePaths(filesPendingStorageDeletion);
+      await reload();
+      closeTicketModal();
+    } catch (err) {
+      console.error(err);
+      alert("Couldn't save — check your connection and try again.");
+    } finally {
+      ticketSaveBtn.disabled = false;
+      ticketSaveBtn.textContent = "Save";
+    }
   });
 
   // ---- Attachment viewer ----
@@ -893,11 +1113,14 @@
     return pdfjsLibPromise;
   }
 
-  async function renderPdfInto(container, blob) {
+  async function renderPdfInto(container, f) {
     container.innerHTML = '<p class="attachment-pdf-status">Loading…</p>';
     try {
       const pdfjsLib = await loadPdfJs();
-      const pdf = await pdfjsLib.getDocument({ data: await blob.arrayBuffer() }).promise;
+      const loadingTask = f.blob
+        ? pdfjsLib.getDocument({ data: await f.blob.arrayBuffer() })
+        : pdfjsLib.getDocument({ url: f.url });
+      const pdf = await loadingTask.promise;
       if (attachmentModal.hidden) return; // closed while loading
 
       container.innerHTML = "";
@@ -932,13 +1155,13 @@
       if (f.type && f.type.startsWith("image/")) {
         const img = document.createElement("img");
         img.alt = "";
-        img.src = trackUrl(URL.createObjectURL(f.blob));
+        img.src = fileImageSrc(f);
         slide.appendChild(img);
       } else {
         const pdfContainer = document.createElement("div");
         pdfContainer.className = "attachment-pdf";
         slide.appendChild(pdfContainer);
-        renderPdfInto(pdfContainer, f.blob);
+        renderPdfInto(pdfContainer, f);
       }
 
       attachmentCarousel.appendChild(slide);
@@ -1115,11 +1338,190 @@
     }
   }
 
+  // ---- Family setup (share with family vs. this device only) ----
+
+  const familySetupModal = document.getElementById("family-setup-modal");
+  const familySetupCloseBtn = document.getElementById("family-setup-close-x");
+  const familySetupChoiceView = document.getElementById("family-setup-choice");
+  const familySetupJoinView = document.getElementById("family-setup-join");
+  const familySetupDoneView = document.getElementById("family-setup-done");
+  const familyCreateBtn = document.getElementById("family-create-btn");
+  const familyJoinOpenBtn = document.getElementById("family-join-open-btn");
+  const familyLocalBtn = document.getElementById("family-local-btn");
+  const familyJoinCodeInput = document.getElementById("family-join-code-input");
+  const familyJoinConfirmBtn = document.getElementById("family-join-confirm-btn");
+  const familyJoinBackBtn = document.getElementById("family-join-back-btn");
+  const familyJoinError = document.getElementById("family-join-error");
+  const familySetupCodeDisplay = document.getElementById("family-setup-code-display");
+  const familyMigrateRow = document.getElementById("family-migrate-row");
+  const familyMigrateCount = document.getElementById("family-migrate-count");
+  const familyMigrateBtn = document.getElementById("family-migrate-btn");
+  const familyMigrateSkipBtn = document.getElementById("family-migrate-skip-btn");
+  const familySetupDoneCloseBtn = document.getElementById("family-setup-done-close-btn");
+  const familyInviteBtn = document.getElementById("family-invite-btn");
+  const familyCopyBtn = document.getElementById("family-copy-code-btn");
+  const familyLeaveBtn = document.getElementById("family-leave-btn");
+  const headerSettingsBtn = document.getElementById("header-settings-btn");
+
+  function showFamilySetupView(view) {
+    familySetupChoiceView.hidden = view !== "choice";
+    familySetupJoinView.hidden = view !== "join";
+    familySetupDoneView.hidden = view !== "done";
+  }
+
+  // The very first run (no mode chosen yet) is mandatory — no × to bail out
+  // of without picking something. Opened later from the gear icon, it's a
+  // normal dismissible modal.
+  function openFamilySetupModal({ mandatory }) {
+    familySetupCloseBtn.hidden = !!mandatory;
+    familyJoinCodeInput.value = "";
+    familyJoinError.hidden = true;
+    if (getMode() === "cloud") {
+      showFamilyDoneView(getFamilyCode(), { offerMigration: false });
+    } else {
+      showFamilySetupView("choice");
+    }
+    familySetupModal.hidden = false;
+  }
+
+  function closeFamilySetupModal() {
+    familySetupModal.hidden = true;
+  }
+
+  async function showFamilyDoneView(code, { offerMigration }) {
+    familySetupCodeDisplay.textContent = code;
+    familyMigrateRow.hidden = true;
+    showFamilySetupView("done");
+    if (offerMigration) {
+      const localTickets = await getAllLocalTickets();
+      if (localTickets.length) {
+        familyMigrateCount.textContent = String(localTickets.length);
+        familyMigrateRow.hidden = false;
+      }
+    }
+  }
+
+  familyCreateBtn.addEventListener("click", async () => {
+    familyCreateBtn.disabled = true;
+    try {
+      const code = await createFamily();
+      await showFamilyDoneView(code, { offerMigration: true });
+      await continueInit();
+    } catch (err) {
+      console.error(err);
+      alert("Couldn't create a family right now — check your connection and try again.");
+    } finally {
+      familyCreateBtn.disabled = false;
+    }
+  });
+
+  familyJoinOpenBtn.addEventListener("click", () => showFamilySetupView("join"));
+  familyJoinBackBtn.addEventListener("click", () => showFamilySetupView("choice"));
+
+  familyJoinConfirmBtn.addEventListener("click", async () => {
+    const code = familyJoinCodeInput.value.trim().toUpperCase();
+    if (!code) return;
+    familyJoinConfirmBtn.disabled = true;
+    familyJoinError.hidden = true;
+    try {
+      const joined = await joinFamily(code);
+      if (!joined) {
+        familyJoinError.textContent = "That code wasn't found — double-check it and try again.";
+        familyJoinError.hidden = false;
+        return;
+      }
+      await showFamilyDoneView(code, { offerMigration: false });
+      await continueInit();
+    } catch (err) {
+      console.error(err);
+      familyJoinError.textContent = "Couldn't check that code — check your connection and try again.";
+      familyJoinError.hidden = false;
+    } finally {
+      familyJoinConfirmBtn.disabled = false;
+    }
+  });
+
+  familyLocalBtn.addEventListener("click", async () => {
+    useLocalOnly();
+    closeFamilySetupModal();
+    await continueInit();
+  });
+
+  familyMigrateBtn.addEventListener("click", async () => {
+    familyMigrateBtn.disabled = true;
+    try {
+      const localTickets = await getAllLocalTickets();
+      for (const t of localTickets) {
+        const files = getTicketFiles(t);
+        const uploadedFiles = files.length ? await uploadWorkingFilesForCloud(t.id, files) : [];
+        const { fileBlob, fileType, fileName, ...rest } = t;
+        await familyTicketsCollection().doc(t.id).set({ ...rest, files: uploadedFiles });
+        await deleteLocalTicket(t.id);
+      }
+      familyMigrateRow.hidden = true;
+    } catch (err) {
+      console.error(err);
+      alert("Some shows couldn't be moved over — you can try again from the gear icon later.");
+    } finally {
+      familyMigrateBtn.disabled = false;
+    }
+  });
+
+  familyMigrateSkipBtn.addEventListener("click", () => {
+    familyMigrateRow.hidden = true;
+  });
+
+  familySetupCloseBtn.addEventListener("click", closeFamilySetupModal);
+  familySetupDoneCloseBtn.addEventListener("click", closeFamilySetupModal);
+
+  familyCopyBtn.addEventListener("click", async () => {
+    try {
+      await navigator.clipboard.writeText(getFamilyCode());
+      familyCopyBtn.textContent = "Copied!";
+      setTimeout(() => (familyCopyBtn.textContent = "Copy code"), 1500);
+    } catch {
+      // Clipboard permission denied or unavailable — the code is already
+      // visible on screen, so there's nothing more useful to do here.
+    }
+  });
+
+  familyInviteBtn.addEventListener("click", async () => {
+    const code = getFamilyCode();
+    const text = `Join my Showtime family so we can see the same shows! Open ${location.origin}${location.pathname} and choose "Join a family" with this code: ${code}`;
+    if (navigator.share) {
+      try {
+        await navigator.share({ text });
+        return;
+      } catch {
+        return; // user cancelled the share sheet
+      }
+    }
+    location.href = `mailto:?subject=${encodeURIComponent("Join my Showtime family")}&body=${encodeURIComponent(text)}`;
+  });
+
+  familyLeaveBtn.addEventListener("click", async () => {
+    if (!confirm("Switch this device back to local-only? You'll stop seeing the shared family list here (nothing is deleted from it).")) return;
+    if (unsubscribeTicketsListener) {
+      unsubscribeTicketsListener();
+      unsubscribeTicketsListener = null;
+    }
+    useLocalOnly();
+    closeFamilySetupModal();
+    await continueInit();
+  });
+
+  headerSettingsBtn.addEventListener("click", () => openFamilySetupModal({ mandatory: false }));
+
   // ---- Load ----
 
   async function reload() {
+    if (getMode() === "cloud") {
+      await ensureFirebase();
+      await startTicketsSync();
+      return;
+    }
     revokeTrackedUrls();
-    tickets = await getAllTickets();
+    tickets = await getAllLocalTickets();
     render();
   }
 
@@ -1139,7 +1541,16 @@
     }
   }
 
-  reload().then(consumeSharedContentIfAny);
+  async function continueInit() {
+    await reload();
+    await consumeSharedContentIfAny();
+  }
+
+  if (!getMode()) {
+    openFamilySetupModal({ mandatory: true });
+  } else {
+    continueInit();
+  }
 
   // ---- Service worker (offline support) ----
 

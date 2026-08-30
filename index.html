@@ -16,14 +16,17 @@
   <link rel="apple-touch-icon" href="apple-touch-icon.png?v=3" />
   <link rel="icon" href="icon.svg?v=3" type="image/svg+xml" />
   <title>Showtime</title>
-  <link rel="stylesheet" href="styles.css?v=17" />
+  <link rel="stylesheet" href="styles.css?v=18" />
 </head>
 <body>
   <div class="app">
     <header class="app-header">
       <img class="brand-logo" src="icon.svg?v=3" alt="" width="40" height="40" />
       <h1 class="brand-title"><span class="brand-title-thin">Show</span><span class="brand-title-bold">time</span></h1>
-      <button id="header-add-btn" class="header-add-btn" type="button" aria-label="Add event">+</button>
+      <div class="header-actions">
+        <button id="header-settings-btn" class="header-icon-btn" type="button" aria-label="Family sharing settings">⚙️</button>
+        <button id="header-add-btn" class="header-add-btn" type="button" aria-label="Add event">+</button>
+      </div>
     </header>
 
     <main>
@@ -183,6 +186,58 @@
     </div>
   </div>
 
-  <script src="app.js?v=26"></script>
+  <!-- Local-only device vs. shared family list -->
+  <div id="family-setup-modal" class="modal" hidden>
+    <div class="modal-backdrop"></div>
+    <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="family-setup-choice-title">
+      <button type="button" id="family-setup-close-x" class="modal-close-btn" aria-label="Close">&times;</button>
+
+      <div id="family-setup-choice">
+        <h2 id="family-setup-choice-title">Share Showtime with family</h2>
+        <p class="modal-hint">Keep your shows on this device only, or share a live list with family members — everyone who joins can add, edit, and attach tickets.</p>
+        <div class="modal-actions modal-actions-stacked">
+          <button type="button" id="family-create-btn" class="btn btn-primary">Create a new family</button>
+          <button type="button" id="family-join-open-btn" class="btn btn-ghost-outline">Join a family</button>
+          <button type="button" id="family-local-btn" class="btn btn-ghost">Just use it on this device</button>
+        </div>
+      </div>
+
+      <div id="family-setup-join" hidden>
+        <h2>Join a family</h2>
+        <p class="modal-hint">Enter the family code someone shared with you.</p>
+        <input id="family-join-code-input" type="text" autocomplete="off" autocapitalize="characters" placeholder="e.g. AB3XQK9F" />
+        <p id="family-join-error" class="field-hint" hidden></p>
+        <div class="modal-actions modal-actions-stacked">
+          <button type="button" id="family-join-confirm-btn" class="btn btn-primary">Join</button>
+          <button type="button" id="family-join-back-btn" class="btn btn-ghost">Back</button>
+        </div>
+      </div>
+
+      <div id="family-setup-done" hidden>
+        <h2>Your family</h2>
+        <p class="modal-hint">Your family code:</p>
+        <p id="family-setup-code-display" class="family-code-display"></p>
+        <div class="modal-actions">
+          <button type="button" id="family-invite-btn" class="btn btn-primary">Invite</button>
+          <button type="button" id="family-copy-code-btn" class="btn btn-ghost-outline">Copy code</button>
+        </div>
+        <div id="family-migrate-row" class="modal-actions modal-actions-stacked" hidden>
+          <p class="field-hint">You have <span id="family-migrate-count"></span> show(s) saved on this device. Add them to the shared family list?</p>
+          <button type="button" id="family-migrate-btn" class="btn btn-primary">Add my existing shows</button>
+          <button type="button" id="family-migrate-skip-btn" class="btn btn-ghost">Skip</button>
+        </div>
+        <button type="button" id="family-leave-btn" class="btn-text-link">Switch this device to local-only</button>
+        <div class="modal-actions">
+          <button type="button" id="family-setup-done-close-btn" class="btn btn-primary">Done</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-storage-compat.js"></script>
+  <script src="app.js?v=27"></script>
 </body>
 </html>

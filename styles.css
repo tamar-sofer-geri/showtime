@@ -58,9 +58,32 @@ html, body {
   color: transparent;
 }
 
-.header-add-btn {
+.header-actions {
   flex: 0 0 auto;
   margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.header-icon-btn {
+  flex: 0 0 auto;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: none;
+  background: transparent;
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.header-icon-btn:active { background: var(--accent); }
+
+.header-add-btn {
+  flex: 0 0 auto;
   width: 40px;
   height: 40px;
   border-radius: 50%;
@@ -483,6 +506,35 @@ html, body {
   background: transparent;
   color: var(--accent-ink);
   border: 1.5px solid var(--accent);
+}
+
+/* Family sharing setup */
+.family-code-display {
+  margin: 6px 0 16px;
+  padding: 14px;
+  border-radius: 12px;
+  background: var(--bg);
+  border: 1.5px dashed var(--accent);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  text-align: center;
+  color: var(--accent-ink);
+}
+
+.btn-text-link {
+  display: block;
+  width: 100%;
+  margin: 14px 0 0;
+  padding: 4px;
+  background: none;
+  border: none;
+  color: var(--muted);
+  font-size: 13px;
+  text-decoration: underline;
+  cursor: pointer;
+  text-align: center;
 }
 
 /* Ticket picker (attach a shared file to an existing ticket) */

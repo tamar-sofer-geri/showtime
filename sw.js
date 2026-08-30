@@ -1,9 +1,9 @@
-const CACHE = "showtime-v30";
+const CACHE = "showtime-v31";
 const ASSETS = [
   "./",
   "index.html",
-  "styles.css?v=17",
-  "app.js?v=26",
+  "styles.css?v=18",
+  "app.js?v=27",
   "manifest.webmanifest",
   "icon.svg?v=3",
   "apple-touch-icon.png?v=3",
@@ -85,6 +85,13 @@ self.addEventListener("fetch", (event) => {
     event.respondWith(handleShareTarget(event.request));
     return;
   }
+
+  // Leave every other origin alone — in particular, the Firebase SDK's
+  // long-lived Firestore streaming requests must never be intercepted here;
+  // treating one as a cacheable GET can hang or break the live sync
+  // connection. Only this app's own same-origin assets get the offline
+  // cache-first treatment below.
+  if (url.origin !== self.location.origin) return;
 
   if (event.request.method !== "GET") return;
 
