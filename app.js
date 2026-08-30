@@ -100,6 +100,32 @@
     return `${-n} days ago`;
   }
 
+  // Ticket-purchase reminder tiers for Planned events (no file attached yet).
+  // Purely in-app: there's no backend to push a notification while the app
+  // is closed, so this surfaces as a highlighted card + label whenever the
+  // app is next opened. Once a file is attached the ticket leaves Planned
+  // entirely, so the reminder is implicitly "cancelled" — nothing to track.
+  function reminderTier(t) {
+    const n = daysUntil(t);
+    if (n < 0) return "overdue";
+    if (n <= 2) return "2-days";
+    if (n <= 7) return "1-week";
+    if (n <= 14) return "2-weeks";
+    if (n <= 30) return "1-month";
+    return null;
+  }
+
+  function reminderLabel(tier) {
+    switch (tier) {
+      case "1-month": return "🔔 1 month out — get tickets";
+      case "2-weeks": return "🔔 2 weeks out — get tickets";
+      case "1-week": return "🔔 1 week out — get tickets";
+      case "2-days": return "🔔 2 days out — get tickets!";
+      case "overdue": return "⚠️ Show already happened";
+      default: return "";
+    }
+  }
+
   function formatDate(dateStr) {
     const d = new Date(`${dateStr}T00:00`);
     return d.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
@@ -246,6 +272,7 @@
   let currentView = "upcoming";
   let editingId = null;
   let workingFiles = []; // [{ blob, name, type }] — the modal's current attachment list while open
+  let modalSnapshot = ""; // form state as of when the modal opened, to detect unsaved changes on close
   const objectUrls = [];
 
   function trackUrl(url) {
@@ -313,13 +340,16 @@
     deleteBg.setAttribute("aria-hidden", "true");
     li.appendChild(deleteBg);
 
+    const files = getTicketFiles(t);
+    const planned = files.length === 0;
+    const tier = planned ? reminderTier(t) : null;
+
     const card = document.createElement("div");
-    const soon = isUpcomingList && daysUntil(t) <= 7;
+    const soon = (isUpcomingList && daysUntil(t) <= 7) || !!tier;
     card.className = "ticket-card" + (soon ? " is-soon" : "");
     card.tabIndex = 0;
     wireCardGestures(card, t);
 
-    const files = getTicketFiles(t);
     const thumbWrap = document.createElement("div");
     thumbWrap.className = "ticket-thumb-wrap";
     const ph = document.createElement("div");
@@ -362,6 +392,13 @@
       sub.className = "ticket-sub";
       sub.textContent = subParts.join(" · ");
       info.appendChild(sub);
+    }
+
+    if (tier) {
+      const reminder = document.createElement("div");
+      reminder.className = "ticket-reminder";
+      reminder.textContent = reminderLabel(tier);
+      info.appendChild(reminder);
     }
 
     card.appendChild(info);
@@ -558,6 +595,7 @@
   const ticketForm = document.getElementById("ticket-form");
   const fileInput = document.getElementById("file-input");
   const fileListEl = document.getElementById("file-list");
+  const unsavedModal = document.getElementById("unsaved-modal");
 
   // ---- Time picker (custom hour/minute/AM-PM selects, not the native
   // <input type="time"> widget — some mobile browsers render that dialog
@@ -621,10 +659,30 @@
 
   [timeHourSelect, timeMinuteSelect].forEach((sel) => sel.addEventListener("change", syncHiddenTime));
 
+  // A cheap, comparable fingerprint of the modal's current field + file
+  // state, used to detect unsaved changes when the user tries to close it.
+  function snapshotFormState() {
+    return JSON.stringify({
+      eventName: ticketForm.eventName.value,
+      venue: ticketForm.venue.value,
+      date: ticketForm.date.value,
+      time: timeInput.value,
+      price: ticketForm.price.value,
+      seat: ticketForm.seat.value,
+      source: ticketForm.source.value,
+      confirmation: ticketForm.confirmation.value,
+      files: workingFiles.map((f) => `${f.name}|${f.type}|${f.blob ? f.blob.size : ""}`),
+    });
+  }
+
+  function isTicketFormDirty() {
+    return snapshotFormState() !== modalSnapshot;
+  }
+
   function openAddModal(prefill) {
     editingId = null;
     workingFiles = [];
-    ticketModalTitle.textContent = "Add ticket";
+    ticketModalTitle.textContent = "Add event";
     ticketForm.reset();
     setTimeSelects("");
 
@@ -642,6 +700,7 @@
       }
     }
 
+    modalSnapshot = snapshotFormState();
     renderFileList();
     ticketModal.hidden = false;
     document.getElementById("event-input").focus();
@@ -652,7 +711,7 @@
     if (!t) return;
     editingId = id;
     workingFiles = getTicketFiles(t).slice();
-    ticketModalTitle.textContent = "Edit ticket";
+    ticketModalTitle.textContent = "Edit event";
     ticketForm.reset();
     ticketForm.eventName.value = t.eventName || "";
     ticketForm.venue.value = t.venue || "";
@@ -662,8 +721,17 @@
     ticketForm.seat.value = t.seat || "";
     ticketForm.source.value = t.source || "";
     ticketForm.confirmation.value = t.confirmation || "";
+    modalSnapshot = snapshotFormState();
     renderFileList();
     ticketModal.hidden = false;
+  }
+
+  function attemptCloseTicketModal() {
+    if (isTicketFormDirty()) {
+      unsavedModal.hidden = false;
+    } else {
+      closeTicketModal();
+    }
   }
 
   function closeTicketModal() {
@@ -722,7 +790,19 @@
 
   document.getElementById("header-add-btn").addEventListener("click", openAddModal);
 
-  ticketModal.querySelectorAll("[data-close]").forEach((el) => el.addEventListener("click", closeTicketModal));
+  ticketModal.querySelectorAll("[data-close]").forEach((el) => el.addEventListener("click", attemptCloseTicketModal));
+
+  document.getElementById("unsaved-save-btn").addEventListener("click", () => {
+    unsavedModal.hidden = true;
+    ticketForm.requestSubmit();
+  });
+  document.getElementById("unsaved-discard-btn").addEventListener("click", () => {
+    unsavedModal.hidden = true;
+    closeTicketModal();
+  });
+  document.getElementById("unsaved-keep-editing-btn").addEventListener("click", () => {
+    unsavedModal.hidden = true;
+  });
 
   ticketForm.addEventListener("submit", async (e) => {
     e.preventDefault();

@@ -16,14 +16,14 @@
   <link rel="apple-touch-icon" href="apple-touch-icon.png?v=3" />
   <link rel="icon" href="icon.svg?v=3" type="image/svg+xml" />
   <title>Showtime</title>
-  <link rel="stylesheet" href="styles.css?v=16" />
+  <link rel="stylesheet" href="styles.css?v=17" />
 </head>
 <body>
   <div class="app">
     <header class="app-header">
       <img class="brand-logo" src="icon.svg?v=3" alt="" width="40" height="40" />
       <h1 class="brand-title"><span class="brand-title-thin">Show</span><span class="brand-title-bold">time</span></h1>
-      <button id="header-add-btn" class="header-add-btn" type="button" aria-label="Add ticket">+</button>
+      <button id="header-add-btn" class="header-add-btn" type="button" aria-label="Add event">+</button>
     </header>
 
     <main>
@@ -73,7 +73,8 @@
   <div id="ticket-modal" class="modal" hidden>
     <div class="modal-backdrop" data-close></div>
     <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="ticket-modal-title">
-      <h2 id="ticket-modal-title">Add ticket</h2>
+      <button type="button" class="modal-close-btn" data-close aria-label="Close">&times;</button>
+      <h2 id="ticket-modal-title">Add event</h2>
       <form id="ticket-form">
         <label for="event-input">Show / event name</label>
         <input id="event-input" name="eventName" type="text" autocomplete="off" placeholder="e.g. Radiohead" required />
@@ -132,6 +133,20 @@
     </div>
   </div>
 
+  <!-- Shown when closing the Add/Edit event modal with unsaved changes -->
+  <div id="unsaved-modal" class="modal" hidden>
+    <div class="modal-backdrop"></div>
+    <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="unsaved-modal-title">
+      <h2 id="unsaved-modal-title">Unsaved changes</h2>
+      <p class="modal-hint">You've made changes that haven't been saved yet.</p>
+      <div class="modal-actions modal-actions-stacked">
+        <button type="button" id="unsaved-save-btn" class="btn btn-primary">Save</button>
+        <button type="button" id="unsaved-discard-btn" class="btn btn-ghost-outline">Discard changes</button>
+        <button type="button" id="unsaved-keep-editing-btn" class="btn btn-ghost">Keep editing</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Shown for every incoming share (once at least one ticket exists): new ticket, or add to an existing one? -->
   <div id="share-choice-modal" class="modal" hidden>
     <div class="modal-backdrop" data-share-choice-close></div>
@@ -168,6 +183,6 @@
     </div>
   </div>
 
-  <script src="app.js?v=22"></script>
+  <script src="app.js?v=23"></script>
 </body>
 </html>
