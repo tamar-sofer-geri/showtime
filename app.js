@@ -255,6 +255,34 @@
         .join("; ");
     }
 
+    // "Clean listing" fallback: plain text copied from a venue page, poster,
+    // or calendar entry often reads as just "Event name / optional details
+    // / date & time / venue", one per line, with none of the ticketing-email
+    // phrasing the heuristics above look for. Anchor on whichever line has
+    // the date: the line before everything is the name, the line right
+    // after is the venue.
+    const dateLineIndex = rawLines.findIndex((l) => dateRe.test(l));
+
+    if (!result.eventName && dateLineIndex > 0) {
+      const candidate = rawLines[0];
+      const looksLikeBoilerplate = /^(dear|hi|hello)\b/i.test(candidate) || /[{}]/.test(candidate);
+      if (candidate.length <= 80 && !looksLikeFilename(candidate) && !looksLikeBoilerplate) {
+        result.eventName = candidate;
+      }
+    }
+
+    if (!result.venue && dateLineIndex >= 0 && dateLineIndex + 1 < rawLines.length) {
+      const candidate = rawLines[dateLineIndex + 1];
+      const looksLikeNotVenue =
+        /^(view|buy|get|register|rsvp|section|order|ticket)/i.test(candidate) ||
+        /^https?:\/\//i.test(candidate) ||
+        /^\$/.test(candidate) ||
+        dateRe.test(candidate);
+      if (candidate.length <= 60 && !looksLikeNotVenue) {
+        result.venue = candidate;
+      }
+    }
+
     if (!result.eventName) {
       let candidate = (title || "").trim().replace(/^(fwd|fw|re)\s*:\s*/i, "");
       const looksLikeBoilerplate = /^(dear|hi|hello)\b/i.test(candidate) || /[{}]/.test(candidate);
