@@ -275,10 +275,17 @@
   const emptyPlannedEl = document.getElementById("empty-planned");
   const emptyPastEl = document.getElementById("empty-past");
 
+  // A ticket is "planned" purely by not having any attached file yet — no
+  // separate flag to keep in sync. Attach a photo/PDF (the actual ticket)
+  // and it moves itself into Upcoming/Past based on its date.
+  function isPlanned(t) {
+    return getTicketFiles(t).length === 0;
+  }
+
   function render() {
-    const planned = tickets.filter((t) => t.planned).sort((a, b) => ticketDateTime(a) - ticketDateTime(b));
-    const upcoming = tickets.filter((t) => !t.planned && isUpcoming(t)).sort((a, b) => ticketDateTime(a) - ticketDateTime(b));
-    const past = tickets.filter((t) => !t.planned && !isUpcoming(t)).sort((a, b) => ticketDateTime(b) - ticketDateTime(a));
+    const planned = tickets.filter(isPlanned).sort((a, b) => ticketDateTime(a) - ticketDateTime(b));
+    const upcoming = tickets.filter((t) => !isPlanned(t) && isUpcoming(t)).sort((a, b) => ticketDateTime(a) - ticketDateTime(b));
+    const past = tickets.filter((t) => !isPlanned(t) && !isUpcoming(t)).sort((a, b) => ticketDateTime(b) - ticketDateTime(a));
 
     renderList(listUpcomingEl, upcoming, true);
     renderList(listPlannedEl, planned, false);
@@ -319,7 +326,7 @@
     ph.className = "ticket-thumb-placeholder";
     // Purple = a ticket is in hand; white silhouette = still just planned,
     // no ticket secured yet — same emoji artwork either way, just recolored.
-    ph.innerHTML = t.planned
+    ph.innerHTML = files.length === 0
       ? '<span class="ticket-thumb-emoji ticket-thumb-emoji-planned">🎟️</span>'
       : '<span class="ticket-thumb-emoji">🎟️</span>';
     thumbWrap.appendChild(ph);
@@ -655,7 +662,6 @@
     ticketForm.seat.value = t.seat || "";
     ticketForm.source.value = t.source || "";
     ticketForm.confirmation.value = t.confirmation || "";
-    ticketForm.planned.checked = !!t.planned;
     renderFileList();
     ticketModal.hidden = false;
   }
@@ -733,7 +739,6 @@
       seat: fd.get("seat").trim(),
       source: fd.get("source").trim(),
       confirmation: fd.get("confirmation").trim(),
-      planned: ticketForm.planned.checked,
       files: workingFiles.map((f) => ({ blob: f.blob, type: f.type, name: f.name })),
     };
 

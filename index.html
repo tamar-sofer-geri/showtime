@@ -16,7 +16,7 @@
   <link rel="apple-touch-icon" href="apple-touch-icon.png?v=3" />
   <link rel="icon" href="icon.svg?v=3" type="image/svg+xml" />
   <title>Showtime</title>
-  <link rel="stylesheet" href="styles.css?v=15" />
+  <link rel="stylesheet" href="styles.css?v=16" />
 </head>
 <body>
   <div class="app">
@@ -81,11 +81,6 @@
         <label for="venue-input">Venue</label>
         <input id="venue-input" name="venue" type="text" autocomplete="off" placeholder="e.g. Madison Square Garden" />
 
-        <label class="checkbox-row" for="planned-input">
-          <input id="planned-input" name="planned" type="checkbox" />
-          <span>Just planning to attend — no ticket yet</span>
-        </label>
-
         <div class="form-row">
           <div>
             <label for="date-input">Date</label>
@@ -126,6 +121,7 @@
 
         <label for="file-input">Ticket photos / PDFs / barcodes</label>
         <input id="file-input" name="file" type="file" accept="image/*,application/pdf" multiple />
+        <p class="field-hint">No file attached yet? This shows under <strong>Planned</strong> instead of Upcoming until you add one.</p>
         <ul id="file-list" class="file-list"></ul>
 
         <div class="modal-actions">
@@ -172,6 +168,6 @@
     </div>
   </div>
 
-  <script src="app.js?v=21"></script>
+  <script src="app.js?v=22"></script>
 </body>
 </html>
