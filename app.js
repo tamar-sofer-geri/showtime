@@ -893,15 +893,17 @@
     past: document.getElementById("view-past"),
   };
 
-  tabs.forEach((tab) => {
-    tab.addEventListener("click", () => {
-      currentView = tab.dataset.view;
-      tabs.forEach((t) => {
-        t.classList.toggle("is-active", t === tab);
-        t.setAttribute("aria-current", t === tab ? "page" : "false");
-      });
-      Object.entries(views).forEach(([key, el]) => (el.hidden = key !== currentView));
+  function switchView(view) {
+    currentView = view;
+    tabs.forEach((t) => {
+      t.classList.toggle("is-active", t.dataset.view === view);
+      t.setAttribute("aria-current", t.dataset.view === view ? "page" : "false");
     });
+    Object.entries(views).forEach(([key, el]) => (el.hidden = key !== currentView));
+  }
+
+  tabs.forEach((tab) => {
+    tab.addEventListener("click", () => switchView(tab.dataset.view));
   });
 
   // ---- Ticket modal ----
@@ -1637,6 +1639,45 @@
   } else {
     continueInit();
   }
+
+  // ---- Back-gesture guard (Android) ----
+  // A page with no browser-history entries makes Android's back button/edge-swipe
+  // close the app outright instead of doing anything in-page. Keep one extra
+  // history entry armed so that gesture always lands on us as a popstate event
+  // instead — closing the topmost open modal first (respecting the same
+  // unsaved-changes and mandatory-setup guards their own close buttons use),
+  // or returning to the Upcoming tab.
+
+  const BACK_DEFAULT_VIEW = "upcoming";
+
+  function closeAnyOpenOverlay() {
+    if (!unsavedModal.hidden) { unsavedModal.hidden = true; return true; }
+    if (!familySetupModal.hidden) {
+      if (!familySetupCloseBtn.hidden) closeFamilySetupModal();
+      return true; // mandatory setup stays open either way; gesture is still consumed
+    }
+    if (!attachmentModal.hidden) {
+      attachmentModal.hidden = true;
+      attachmentCarousel.innerHTML = "";
+      attachmentDots.innerHTML = "";
+      return true;
+    }
+    if (!shareChoiceModal.hidden) { pendingShare = null; closeShareChoiceModal(); return true; }
+    if (!pickerModal.hidden) { pendingShare = null; closePickerModal(); return true; }
+    if (!ticketModal.hidden) { attemptCloseTicketModal(); return true; }
+    return false;
+  }
+
+  function armBackGuard() {
+    try { history.pushState({ showtimeGuard: true }, ""); } catch (e) { /* ignore */ }
+  }
+
+  window.addEventListener("popstate", () => {
+    if (!closeAnyOpenOverlay() && currentView !== BACK_DEFAULT_VIEW) switchView(BACK_DEFAULT_VIEW);
+    armBackGuard();
+  });
+
+  armBackGuard();
 
   // ---- Service worker (offline support) ----
 
