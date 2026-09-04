@@ -1526,7 +1526,7 @@
   );
 
   function openPickerModal() {
-    const sorted = [...tickets].sort((a, b) => ticketDateTime(b) - ticketDateTime(a));
+    const sorted = tickets.filter(isUpcoming).sort((a, b) => ticketDateTime(a) - ticketDateTime(b));
     openListPicker(
       "Add to which event?",
       sorted.map((t) => ({
