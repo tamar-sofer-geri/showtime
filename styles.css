@@ -555,6 +555,17 @@ html, body {
   text-align: center;
 }
 
+#add-to-calendar-row .btn-text-link {
+  color: var(--accent-ink);
+  font-size: 14px;
+  font-weight: 700;
+}
+.btn-text-link-small {
+  margin-top: 6px !important;
+  font-size: 12px !important;
+  font-weight: 400 !important;
+}
+
 /* Ticket picker (attach a shared file to an existing ticket) */
 .picker-list {
   list-style: none;
@@ -642,8 +653,15 @@ html, body {
 .attachment-pdf-status {
   color: #fff;
   font-size: 14px;
-  padding: 24px;
+  padding: 24px 24px 0;
   text-align: center;
+}
+.attachment-pdf-open-link {
+  color: var(--accent);
+  font-size: 14px;
+  font-weight: 700;
+  text-decoration: underline;
+  padding-bottom: 24px;
 }
 .attachment-dots {
   display: flex;

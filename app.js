@@ -931,7 +931,9 @@
   const fileInput = document.getElementById("file-input");
   const fileListEl = document.getElementById("file-list");
   const unsavedModal = document.getElementById("unsaved-modal");
+  const addToCalendarRow = document.getElementById("add-to-calendar-row");
   const addToCalendarBtn = document.getElementById("add-to-calendar-btn");
+  const addToCalendarIcsBtn = document.getElementById("add-to-calendar-ics-btn");
 
   // ---- Time picker (custom hour/minute/AM-PM selects, not the native
   // <input type="time"> widget — some mobile browsers render that dialog
@@ -1021,7 +1023,7 @@
     workingFiles = [];
     filesPendingStorageDeletion = [];
     ticketModalTitle.textContent = "Add event";
-    addToCalendarBtn.hidden = true;
+    addToCalendarRow.hidden = true;
     ticketForm.reset();
     setTimeSelects("");
 
@@ -1053,7 +1055,7 @@
     workingFiles = getTicketFiles(t).slice();
     filesPendingStorageDeletion = [];
     ticketModalTitle.textContent = "Edit event";
-    addToCalendarBtn.hidden = false;
+    addToCalendarRow.hidden = false;
     ticketForm.reset();
     ticketForm.eventName.value = t.eventName || "";
     ticketForm.venue.value = t.venue || "";
@@ -1149,14 +1151,45 @@
     unsavedModal.hidden = true;
   });
 
-  // ---- Add to calendar (.ics) ----
+  // ---- Add to calendar ----
   //
-  // Universal iCalendar file rather than a provider-specific deep link
-  // (e.g. Google Calendar's quick-add URL) — every calendar app (Google,
-  // Apple, Outlook) can import an .ics, so this isn't locked to one
-  // provider. Dates/times are written as floating local time (no TZID/Z),
-  // matching how the rest of the app already treats them: whatever the
-  // user typed, with no timezone tracking or conversion anywhere.
+  // Two options, since they trade off differently:
+  //  - Google Calendar's quick-add URL opens straight to a pre-filled
+  //    "save this event" screen — no file, no share sheet, just a normal
+  //    link tap. The one-more-tap experience most people expect, but only
+  //    works for Google Calendar. Primary action, since Showtime's install
+  //    flow (Web Share Target) is Android/Chrome-only anyway, where Google
+  //    Calendar is overwhelmingly the default.
+  //  - A universal .ics file (secondary) for anyone on a different
+  //    calendar app — shared via navigator.share() where supported, else a
+  //    direct download.
+  // Dates/times in both are floating local time (no timezone conversion
+  // beyond what the browser does implicitly for the Google Calendar link's
+  // UTC-format dates param) — matching how the rest of the app already
+  // treats them: whatever the user typed, no timezone tracked anywhere.
+
+  function buildGoogleCalendarUrl(t) {
+    const [y, m, d] = t.date.split("-").map(Number);
+    const pad = (n) => String(n).padStart(2, "0");
+    let datesParam;
+
+    if (t.time) {
+      const [hh, mm] = t.time.split(":").map(Number);
+      const start = new Date(y, m - 1, d, hh, mm);
+      const end = new Date(start.getTime() + 2 * 60 * 60 * 1000); // default 2-hour duration
+      const fmt = (dt) => dt.toISOString().replace(/[-:]/g, "").split(".")[0] + "Z";
+      datesParam = `${fmt(start)}/${fmt(end)}`;
+    } else {
+      const start = new Date(y, m - 1, d);
+      const end = new Date(y, m - 1, d + 1); // exclusive end date, same as .ics all-day
+      const fmt = (dt) => `${dt.getFullYear()}${pad(dt.getMonth() + 1)}${pad(dt.getDate())}`;
+      datesParam = `${fmt(start)}/${fmt(end)}`;
+    }
+
+    const params = new URLSearchParams({ action: "TEMPLATE", text: t.eventName || "", dates: datesParam });
+    if (t.venue) params.set("location", t.venue);
+    return `https://calendar.google.com/calendar/render?${params.toString()}`;
+  }
 
   function icsEscape(s) {
     return String(s || "")
@@ -1241,6 +1274,11 @@
   }
 
   addToCalendarBtn.addEventListener("click", () => {
+    const t = tickets.find((x) => x.id === editingId);
+    if (t) window.open(buildGoogleCalendarUrl(t), "_blank", "noopener");
+  });
+
+  addToCalendarIcsBtn.addEventListener("click", () => {
     const t = tickets.find((x) => x.id === editingId);
     if (t) addTicketToCalendar(t);
   });
@@ -1338,7 +1376,27 @@
         container.appendChild(canvas);
       }
     } catch (err) {
-      container.innerHTML = '<p class="attachment-pdf-status">Couldn\'t display this PDF.</p>';
+      // Logged rather than silent — a share-received file that's empty or
+      // truncated (seen from some vendor apps' "share ticket" action, and
+      // from Google Drive's "share link" vs. "send a copy") looks identical
+      // to a genuine pdf.js parse failure from here, so this is the only
+      // trace of which one it actually was.
+      console.error("PDF render failed", err);
+      container.innerHTML = "";
+      const status = document.createElement("p");
+      status.className = "attachment-pdf-status";
+      status.textContent = "Couldn't display this PDF.";
+      container.appendChild(status);
+      // A way to still get at the file even when our own viewer can't
+      // render it — opens in a new tab, letting the OS/browser's own PDF
+      // handling (or a plain download) take over instead of a dead end.
+      const openLink = document.createElement("a");
+      openLink.className = "attachment-pdf-open-link";
+      openLink.textContent = "Try opening it directly";
+      openLink.target = "_blank";
+      openLink.rel = "noopener";
+      openLink.href = f.blob ? trackUrl(URL.createObjectURL(f.blob)) : f.url;
+      container.appendChild(openLink);
     }
   }
 
@@ -1735,6 +1793,21 @@
 
     const share = await takePendingShare();
     if (!share) return;
+
+    // Some vendor apps' "share ticket" action and Google Drive's "share
+    // link" (vs. "send a copy") can hand over an empty or near-empty file
+    // via the OS share sheet — it still shows up as an attachment, but can
+    // never actually render. Catch it here instead of leaving the file
+    // silently attached only to fail later with a generic PDF error.
+    if (share.fileBlob && share.fileBlob.size < 100) {
+      console.warn("Shared file arrived empty or near-empty", share.fileName, share.fileBlob.size);
+      alert(
+        `"${share.fileName || "The shared file"}" arrived empty, so it won't display. This can happen with some apps' share option — try saving it to Photos/Files first, then sharing that saved copy instead.`
+      );
+      share.fileBlob = null;
+      share.fileType = null;
+      share.fileName = null;
+    }
 
     const parsed = parseSharedText(share.title, share.text || share.url);
 
