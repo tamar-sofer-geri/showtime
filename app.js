@@ -1336,68 +1336,35 @@
   const attachmentCarousel = document.getElementById("attachment-carousel");
   const attachmentDots = document.getElementById("attachment-dots");
 
-  // Renders every page of a PDF onto its own <canvas> inside the given
-  // container — no navigation, no separate browser/native PDF viewer, no
-  // "how do I get back to the app" confusion. Both the native <iframe>-embed
-  // and the real-navigation approaches tried earlier ran into real platform
-  // limitations (Android Chrome won't render a blob: PDF inline in an
-  // iframe; a real navigation takes over the whole installed-PWA window
-  // with no reliable way back). Rendering it ourselves with pdf.js
-  // sidesteps both.
-  let pdfjsLibPromise = null;
-  function loadPdfJs() {
-    if (!pdfjsLibPromise) {
-      pdfjsLibPromise = import("./vendor/pdfjs/pdf.min.mjs").then((lib) => {
-        lib.GlobalWorkerOptions.workerSrc = "vendor/pdfjs/pdf.worker.min.mjs";
-        return lib;
-      });
+  // PDFs open directly (new tab, native OS/browser PDF handling) rather
+  // than rendering in-app. This used to render each page onto a <canvas>
+  // via a vendored pdf.js — abandoned after real-world tickets kept
+  // failing to parse there (both shared in and added via "Choose Files",
+  // so not a share-pipeline bug) while opening the exact same file
+  // directly always worked. Two earlier approaches were also ruled out for
+  // unrelated reasons: an <iframe> embed doesn't render inline on Android
+  // Chrome, and a real same-window navigation to the blob: URL takes over
+  // the whole installed-PWA window with no reliable way back. A new tab
+  // avoids that — closing it leaves the app exactly where it was.
+  function renderPdfSlideInto(container, f) {
+    container.innerHTML = "";
+    const icon = document.createElement("div");
+    icon.className = "attachment-pdf-icon";
+    icon.textContent = "📄";
+    container.appendChild(icon);
+    if (f.name) {
+      const name = document.createElement("p");
+      name.className = "attachment-pdf-status";
+      name.textContent = f.name;
+      container.appendChild(name);
     }
-    return pdfjsLibPromise;
-  }
-
-  async function renderPdfInto(container, f) {
-    container.innerHTML = '<p class="attachment-pdf-status">Loading…</p>';
-    try {
-      const pdfjsLib = await loadPdfJs();
-      const loadingTask = f.blob
-        ? pdfjsLib.getDocument({ data: await f.blob.arrayBuffer() })
-        : pdfjsLib.getDocument({ url: f.url });
-      const pdf = await loadingTask.promise;
-      if (attachmentModal.hidden) return; // closed while loading
-
-      container.innerHTML = "";
-      for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
-        const page = await pdf.getPage(pageNum);
-        const viewport = page.getViewport({ scale: 2 });
-        const canvas = document.createElement("canvas");
-        canvas.width = viewport.width;
-        canvas.height = viewport.height;
-        await page.render({ canvasContext: canvas.getContext("2d"), viewport }).promise;
-        container.appendChild(canvas);
-      }
-    } catch (err) {
-      // Logged rather than silent — a share-received file that's empty or
-      // truncated (seen from some vendor apps' "share ticket" action, and
-      // from Google Drive's "share link" vs. "send a copy") looks identical
-      // to a genuine pdf.js parse failure from here, so this is the only
-      // trace of which one it actually was.
-      console.error("PDF render failed", err);
-      container.innerHTML = "";
-      const status = document.createElement("p");
-      status.className = "attachment-pdf-status";
-      status.textContent = "Couldn't display this PDF.";
-      container.appendChild(status);
-      // A way to still get at the file even when our own viewer can't
-      // render it — opens in a new tab, letting the OS/browser's own PDF
-      // handling (or a plain download) take over instead of a dead end.
-      const openLink = document.createElement("a");
-      openLink.className = "attachment-pdf-open-link";
-      openLink.textContent = "Try opening it directly";
-      openLink.target = "_blank";
-      openLink.rel = "noopener";
-      openLink.href = f.blob ? trackUrl(URL.createObjectURL(f.blob)) : f.url;
-      container.appendChild(openLink);
-    }
+    const openLink = document.createElement("a");
+    openLink.className = "attachment-pdf-open-link";
+    openLink.textContent = "Open PDF";
+    openLink.target = "_blank";
+    openLink.rel = "noopener";
+    openLink.href = f.blob ? trackUrl(URL.createObjectURL(f.blob)) : f.url;
+    container.appendChild(openLink);
   }
 
   // The full-size viewer for one or more of a ticket's attached files —
@@ -1423,7 +1390,7 @@
         const pdfContainer = document.createElement("div");
         pdfContainer.className = "attachment-pdf";
         slide.appendChild(pdfContainer);
-        renderPdfInto(pdfContainer, f);
+        renderPdfSlideInto(pdfContainer, f);
       }
 
       attachmentCarousel.appendChild(slide);
