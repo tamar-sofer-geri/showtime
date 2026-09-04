@@ -806,6 +806,23 @@
     undoBar.hidden = true;
   }
 
+  // A plain auto-dismissing confirmation, reusing the undo bar's pill with
+  // its Undo button hidden — for actions (like a calendar file download)
+  // that need visible "this worked" feedback but have nothing to undo.
+  // Skipped while a real pending action is showing, so it can't stomp on
+  // an active delete/move Undo prompt.
+  let toastTimer = null;
+  function showToast(message, ms = 2500) {
+    if (pendingAction) return;
+    clearTimeout(toastTimer);
+    undoBtn.hidden = true;
+    showUndoBar(message);
+    toastTimer = setTimeout(() => {
+      hideUndoBar();
+      undoBtn.hidden = false;
+    }, ms);
+  }
+
   async function finalizePendingAction() {
     if (!pendingAction) return;
     const { type, ticket, timer } = pendingAction;
@@ -1216,6 +1233,7 @@
       a.click();
       a.remove();
       setTimeout(() => URL.revokeObjectURL(url), 1000);
+      showToast(`Downloaded "${file.name}" — open it to add to your calendar`, 4000);
     } catch (err) {
       console.error(err);
       alert("Couldn't create the calendar file. Try again in a moment.");
