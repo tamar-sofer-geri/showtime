@@ -914,6 +914,7 @@
   const fileInput = document.getElementById("file-input");
   const fileListEl = document.getElementById("file-list");
   const unsavedModal = document.getElementById("unsaved-modal");
+  const addToCalendarBtn = document.getElementById("add-to-calendar-btn");
 
   // ---- Time picker (custom hour/minute/AM-PM selects, not the native
   // <input type="time"> widget — some mobile browsers render that dialog
@@ -1003,6 +1004,7 @@
     workingFiles = [];
     filesPendingStorageDeletion = [];
     ticketModalTitle.textContent = "Add event";
+    addToCalendarBtn.hidden = true;
     ticketForm.reset();
     setTimeSelects("");
 
@@ -1034,6 +1036,7 @@
     workingFiles = getTicketFiles(t).slice();
     filesPendingStorageDeletion = [];
     ticketModalTitle.textContent = "Edit event";
+    addToCalendarBtn.hidden = false;
     ticketForm.reset();
     ticketForm.eventName.value = t.eventName || "";
     ticketForm.venue.value = t.venue || "";
@@ -1127,6 +1130,92 @@
   });
   document.getElementById("unsaved-keep-editing-btn").addEventListener("click", () => {
     unsavedModal.hidden = true;
+  });
+
+  // ---- Add to calendar (.ics) ----
+  //
+  // Universal iCalendar file rather than a provider-specific deep link
+  // (e.g. Google Calendar's quick-add URL) — every calendar app (Google,
+  // Apple, Outlook) can import an .ics, so this isn't locked to one
+  // provider. Dates/times are written as floating local time (no TZID/Z),
+  // matching how the rest of the app already treats them: whatever the
+  // user typed, with no timezone tracking or conversion anywhere.
+
+  function icsEscape(s) {
+    return String(s || "")
+      .replace(/\\/g, "\\\\")
+      .replace(/;/g, "\\;")
+      .replace(/,/g, "\\,")
+      .replace(/\n/g, "\\n");
+  }
+
+  function icsDateStamp(d) {
+    return d.toISOString().replace(/[-:]/g, "").split(".")[0] + "Z";
+  }
+
+  function buildIcsContent(t) {
+    const [y, m, d] = t.date.split("-").map(Number);
+    const pad = (n) => String(n).padStart(2, "0");
+    let dtStart, dtEnd;
+
+    if (t.time) {
+      const [hh, mm] = t.time.split(":").map(Number);
+      const start = new Date(y, m - 1, d, hh, mm);
+      const end = new Date(start.getTime() + 2 * 60 * 60 * 1000); // default 2-hour duration
+      const fmt = (dt) => `${dt.getFullYear()}${pad(dt.getMonth() + 1)}${pad(dt.getDate())}T${pad(dt.getHours())}${pad(dt.getMinutes())}00`;
+      dtStart = `DTSTART:${fmt(start)}`;
+      dtEnd = `DTEND:${fmt(end)}`;
+    } else {
+      const start = new Date(y, m - 1, d);
+      const end = new Date(y, m - 1, d + 1); // iCal all-day end date is exclusive
+      const fmt = (dt) => `${dt.getFullYear()}${pad(dt.getMonth() + 1)}${pad(dt.getDate())}`;
+      dtStart = `DTSTART;VALUE=DATE:${fmt(start)}`;
+      dtEnd = `DTEND;VALUE=DATE:${fmt(end)}`;
+    }
+
+    const lines = [
+      "BEGIN:VCALENDAR",
+      "VERSION:2.0",
+      "PRODID:-//Showtime//EN",
+      "BEGIN:VEVENT",
+      `UID:${t.id}@showtime`,
+      `DTSTAMP:${icsDateStamp(new Date())}`,
+      dtStart,
+      dtEnd,
+      `SUMMARY:${icsEscape(t.eventName)}`,
+    ];
+    if (t.venue) lines.push(`LOCATION:${icsEscape(t.venue)}`);
+    lines.push("END:VEVENT", "END:VCALENDAR");
+    return lines.join("\r\n");
+  }
+
+  async function addTicketToCalendar(t) {
+    const ics = buildIcsContent(t);
+    const safeName = (t.eventName || "event").replace(/[^\w\- ]/g, "").trim().slice(0, 60) || "event";
+    const file = new File([ics], `${safeName}.ics`, { type: "text/calendar" });
+
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      try {
+        await navigator.share({ files: [file], title: t.eventName });
+        return;
+      } catch {
+        return; // user cancelled the share sheet
+      }
+    }
+
+    const url = URL.createObjectURL(file);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = file.name;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+
+  addToCalendarBtn.addEventListener("click", () => {
+    const t = tickets.find((x) => x.id === editingId);
+    if (t) addTicketToCalendar(t);
   });
 
   const ticketSaveBtn = ticketForm.querySelector('button[type="submit"]');
