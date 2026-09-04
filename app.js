@@ -1190,27 +1190,36 @@
   }
 
   async function addTicketToCalendar(t) {
-    const ics = buildIcsContent(t);
-    const safeName = (t.eventName || "event").replace(/[^\w\- ]/g, "").trim().slice(0, 60) || "event";
-    const file = new File([ics], `${safeName}.ics`, { type: "text/calendar" });
+    try {
+      const ics = buildIcsContent(t);
+      const safeName = (t.eventName || "event").replace(/[^\w\- ]/g, "").trim().slice(0, 60) || "event";
+      const file = new File([ics], `${safeName}.ics`, { type: "text/calendar" });
 
-    if (navigator.canShare && navigator.canShare({ files: [file] })) {
-      try {
-        await navigator.share({ files: [file], title: t.eventName });
-        return;
-      } catch {
-        return; // user cancelled the share sheet
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        try {
+          await navigator.share({ files: [file], title: t.eventName });
+          return;
+        } catch (err) {
+          // AbortError = the user closed the share sheet without picking
+          // anything — genuinely nothing to do. Anything else (no matching
+          // app, a permissions quirk, etc.) falls through to the direct
+          // download below instead of silently doing nothing.
+          if (err && err.name === "AbortError") return;
+        }
       }
-    }
 
-    const url = URL.createObjectURL(file);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = file.name;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
+      const url = URL.createObjectURL(file);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = file.name;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (err) {
+      console.error(err);
+      alert("Couldn't create the calendar file. Try again in a moment.");
+    }
   }
 
   addToCalendarBtn.addEventListener("click", () => {
