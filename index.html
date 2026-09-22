@@ -16,7 +16,7 @@
   <link rel="apple-touch-icon" href="apple-touch-icon.png?v=3" />
   <link rel="icon" href="icon.svg?v=3" type="image/svg+xml" />
   <title>Showtime</title>
-  <link rel="stylesheet" href="styles.css?v=22" />
+  <link rel="stylesheet" href="styles.css?v=23" />
 </head>
 <body>
   <div class="app">
@@ -132,16 +132,29 @@
         <input id="ticket-link-input" name="ticketLink" type="url" inputmode="url" autocomplete="off" placeholder="e.g. a link to open it in the vendor's app" />
         <p class="field-hint">For live/rotating barcodes some vendors only show in their own app — press and hold the card to open this link, and swipe the card left in Planned to move it to Upcoming.</p>
 
-        <div id="add-to-calendar-row" hidden>
-          <button type="button" id="add-to-calendar-btn" class="btn-text-link">📅 Add to Google Calendar</button>
-          <button type="button" id="add-to-calendar-ics-btn" class="btn-text-link btn-text-link-small">Use a different calendar app</button>
-        </div>
-
         <div class="modal-actions">
           <button type="button" class="btn btn-ghost" data-close>Cancel</button>
           <button type="submit" class="btn btn-primary">Save</button>
         </div>
       </form>
+    </div>
+  </div>
+
+  <!-- Read-only event details, opened by tapping a card; Edit opens the full form -->
+  <div id="ticket-info-modal" class="modal" hidden>
+    <div class="modal-backdrop" data-info-close></div>
+    <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="ticket-info-title">
+      <button type="button" class="modal-close-btn" data-info-close aria-label="Close">&times;</button>
+      <h2 id="ticket-info-title"></h2>
+      <div id="ticket-info-rows" class="info-rows"></div>
+      <button type="button" id="ticket-info-view-btn" class="btn-text-link" hidden></button>
+      <div id="add-to-calendar-row" hidden>
+        <button type="button" id="add-to-calendar-btn" class="btn-text-link">📅 Add to Google Calendar</button>
+        <button type="button" id="add-to-calendar-ics-btn" class="btn-text-link btn-text-link-small">Use a different calendar app</button>
+      </div>
+      <div class="modal-actions">
+        <button type="button" id="ticket-info-edit-btn" class="btn btn-primary">Edit</button>
+      </div>
     </div>
   </div>
 
@@ -247,6 +260,6 @@
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-storage-compat.js"></script>
-  <script src="app.js?v=37"></script>
+  <script src="app.js?v=38"></script>
 </body>
 </html>

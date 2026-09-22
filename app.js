@@ -497,6 +497,7 @@
   let tickets = [];
   let currentView = "upcoming";
   let editingId = null;
+  let infoTicketId = null; // ticket currently shown in the read-only info modal
   let workingFiles = []; // [{ blob, name, type }] (freshly picked) or [{ url, path, name, type }] (already in cloud Storage)
   let modalSnapshot = ""; // form state as of when the modal opened, to detect unsaved changes on close
   let filesPendingStorageDeletion = []; // Storage paths removed from workingFiles this edit, deleted on Save (cloud mode)
@@ -789,7 +790,7 @@
         wasSwipe = false;
         return;
       }
-      openEditModal(t.id);
+      openInfoModal(t.id);
     });
   }
 
@@ -956,9 +957,6 @@
   const fileInput = document.getElementById("file-input");
   const fileListEl = document.getElementById("file-list");
   const unsavedModal = document.getElementById("unsaved-modal");
-  const addToCalendarRow = document.getElementById("add-to-calendar-row");
-  const addToCalendarBtn = document.getElementById("add-to-calendar-btn");
-  const addToCalendarIcsBtn = document.getElementById("add-to-calendar-ics-btn");
 
   // ---- Time picker (custom hour/minute/AM-PM selects, not the native
   // <input type="time"> widget — some mobile browsers render that dialog
@@ -1048,7 +1046,6 @@
     workingFiles = [];
     filesPendingStorageDeletion = [];
     ticketModalTitle.textContent = "Add event";
-    addToCalendarRow.hidden = true;
     ticketForm.reset();
     setTimeSelects("");
 
@@ -1080,7 +1077,6 @@
     workingFiles = getTicketFiles(t).slice();
     filesPendingStorageDeletion = [];
     ticketModalTitle.textContent = "Edit event";
-    addToCalendarRow.hidden = false;
     ticketForm.reset();
     ticketForm.eventName.value = t.eventName || "";
     ticketForm.venue.value = t.venue || "";
@@ -1174,6 +1170,85 @@
   });
   document.getElementById("unsaved-keep-editing-btn").addEventListener("click", () => {
     unsavedModal.hidden = true;
+  });
+
+  // ---- Ticket info modal (read-only) ----
+  //
+  // Tapping a card opens this rather than jumping straight into Edit — a
+  // form full of editable fields is a lot to look at just to check a date
+  // or venue. Edit is one explicit tap away from here instead.
+
+  const ticketInfoModal = document.getElementById("ticket-info-modal");
+  const ticketInfoTitle = document.getElementById("ticket-info-title");
+  const ticketInfoRows = document.getElementById("ticket-info-rows");
+  const ticketInfoViewBtn = document.getElementById("ticket-info-view-btn");
+  const ticketInfoEditBtn = document.getElementById("ticket-info-edit-btn");
+  const addToCalendarRow = document.getElementById("add-to-calendar-row");
+  const addToCalendarBtn = document.getElementById("add-to-calendar-btn");
+  const addToCalendarIcsBtn = document.getElementById("add-to-calendar-ics-btn");
+
+  function addInfoRow(label, value) {
+    if (!value) return;
+    const row = document.createElement("div");
+    row.className = "info-row";
+    const l = document.createElement("span");
+    l.className = "info-label";
+    l.textContent = label;
+    const v = document.createElement("span");
+    v.className = "info-value";
+    v.textContent = value;
+    row.appendChild(l);
+    row.appendChild(v);
+    ticketInfoRows.appendChild(row);
+  }
+
+  function openInfoModal(id) {
+    const t = tickets.find((x) => x.id === id);
+    if (!t) return;
+    infoTicketId = id;
+
+    ticketInfoTitle.textContent = t.eventName;
+    ticketInfoRows.innerHTML = "";
+    const dateParts = [formatDate(t.date)];
+    if (t.time) dateParts.push(formatTime(t.time));
+    addInfoRow("Date", dateParts.join(" · "));
+    addInfoRow("Venue", t.venue);
+    addInfoRow("Price paid", formatPrice(t.price));
+    addInfoRow("Seat / section", t.seat);
+    addInfoRow("Purchased from", t.source);
+    addInfoRow("Confirmation #", t.confirmation);
+
+    const files = getTicketFiles(t);
+    if (files.length) {
+      ticketInfoViewBtn.textContent = files.length > 1 ? `🎟️ View ${files.length} attached files` : "🎟️ View attached ticket";
+      ticketInfoViewBtn.hidden = false;
+    } else if (t.ticketLink) {
+      ticketInfoViewBtn.textContent = "🔗 Open ticket link";
+      ticketInfoViewBtn.hidden = false;
+    } else {
+      ticketInfoViewBtn.hidden = true;
+    }
+
+    addToCalendarRow.hidden = false;
+    ticketInfoModal.hidden = false;
+  }
+
+  function closeInfoModal() {
+    ticketInfoModal.hidden = true;
+    infoTicketId = null;
+  }
+
+  ticketInfoModal.querySelectorAll("[data-info-close]").forEach((el) => el.addEventListener("click", closeInfoModal));
+
+  ticketInfoViewBtn.addEventListener("click", () => {
+    const t = tickets.find((x) => x.id === infoTicketId);
+    if (t) openAttachmentForTicket(t);
+  });
+
+  ticketInfoEditBtn.addEventListener("click", () => {
+    const id = infoTicketId;
+    closeInfoModal();
+    if (id) openEditModal(id);
   });
 
   // ---- Add to calendar ----
@@ -1299,12 +1374,12 @@
   }
 
   addToCalendarBtn.addEventListener("click", () => {
-    const t = tickets.find((x) => x.id === editingId);
+    const t = tickets.find((x) => x.id === infoTicketId);
     if (t) window.open(buildGoogleCalendarUrl(t), "_blank", "noopener");
   });
 
   addToCalendarIcsBtn.addEventListener("click", () => {
-    const t = tickets.find((x) => x.id === editingId);
+    const t = tickets.find((x) => x.id === infoTicketId);
     if (t) addTicketToCalendar(t);
   });
 
