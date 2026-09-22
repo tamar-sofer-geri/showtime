@@ -547,8 +547,12 @@
 
   function render() {
     const planned = tickets.filter(isPlanned).sort((a, b) => ticketDateTime(a) - ticketDateTime(b));
-    const upcoming = tickets.filter((t) => !isPlanned(t) && isUpcoming(t)).sort((a, b) => ticketDateTime(a) - ticketDateTime(b));
-    const past = tickets.filter((t) => !isPlanned(t) && !isUpcoming(t)).sort((a, b) => ticketDateTime(b) - ticketDateTime(a));
+    const upcoming = tickets
+      .filter((t) => !isPlanned(t) && isUpcoming(t) && !t.movedToPast)
+      .sort((a, b) => ticketDateTime(a) - ticketDateTime(b));
+    const past = tickets
+      .filter((t) => !isPlanned(t) && (!isUpcoming(t) || t.movedToPast))
+      .sort((a, b) => ticketDateTime(b) - ticketDateTime(a));
 
     renderList(listUpcomingEl, upcoming, "upcoming");
     renderList(listPlannedEl, planned, "planned");
@@ -581,17 +585,21 @@
     const tier = planned ? reminderTier(t) : null;
 
     // Left swipe: Planned -> Upcoming always (the ticketConfirmed escape
-    // hatch); Upcoming -> Planned only undoes that same override — a ticket
-    // with a real file attached can't be swiped back, since "un-planning"
-    // it would mean discarding the attachment, too big a step for a swipe.
+    // hatch). Within Upcoming it depends on why the ticket's there: a real
+    // file attached -> Past (done with it / archiving early, doesn't need
+    // to wait for the date), otherwise -> Planned (undoes the ticketConfirmed
+    // override — a ticket with a real file can't be swiped back to Planned,
+    // since that would mean discarding the attachment, too big a step for a
+    // swipe, so it only ever goes to Past instead).
     const canMoveToUpcoming = listKind === "planned";
-    const canMoveToPlanned = listKind === "upcoming" && !!t.ticketConfirmed && files.length === 0;
-    const canSwipeLeft = canMoveToUpcoming || canMoveToPlanned;
+    const canMoveToPast = listKind === "upcoming" && files.length > 0;
+    const canMoveToPlanned = listKind === "upcoming" && !canMoveToPast && !!t.ticketConfirmed;
+    const canSwipeLeft = canMoveToUpcoming || canMoveToPast || canMoveToPlanned;
     let moveBg = null;
     if (canSwipeLeft) {
       moveBg = document.createElement("div");
       moveBg.className = "ticket-row-move-bg";
-      moveBg.textContent = canMoveToUpcoming ? "Move to Upcoming" : "Move to Planned";
+      moveBg.textContent = canMoveToUpcoming ? "Move to Upcoming" : canMoveToPast ? "Move to Past" : "Move to Planned";
       moveBg.setAttribute("aria-hidden", "true");
       li.appendChild(moveBg);
     }
@@ -600,7 +608,8 @@
     const soon = (listKind === "upcoming" && daysUntil(t) <= 7) || !!tier;
     card.className = "ticket-card" + (soon ? " is-soon" : "");
     card.tabIndex = 0;
-    wireCardGestures(card, t, canSwipeLeft, moveBg, canMoveToUpcoming ? swipeMoveToUpcoming : swipeMoveToPlanned);
+    const onSwipeLeft = canMoveToUpcoming ? swipeMoveToUpcoming : canMoveToPast ? swipeMoveToPast : swipeMoveToPlanned;
+    wireCardGestures(card, t, canSwipeLeft, moveBg, onSwipeLeft);
 
     const thumbWrap = document.createElement("div");
     thumbWrap.className = "ticket-thumb-wrap";
@@ -839,6 +848,8 @@
       await putTicket({ ...ticket, ticketConfirmed: true });
     } else if (type === "movePlanned") {
       await putTicket({ ...ticket, ticketConfirmed: false });
+    } else if (type === "movePast") {
+      await putTicket({ ...ticket, movedToPast: true });
     }
   }
 
@@ -874,6 +885,20 @@
     render();
     showUndoBar(`Moved "${ticket.eventName}" to Planned`);
     pendingAction = { type: "movePlanned", ticket, timer: setTimeout(finalizePendingAction, UNDO_WINDOW_MS) };
+  }
+
+  // Upcoming/Past is otherwise purely date-driven (isUpcoming) — this is a
+  // manual override for archiving a ticket early, without waiting for its
+  // date to actually pass. Only offered on Upcoming cards with a real file
+  // attached (see canMoveToPast above); a ticketConfirmed-no-file card
+  // swipes to Planned instead.
+  function swipeMoveToPast(ticket) {
+    finalizePendingAction();
+    const updated = { ...ticket, movedToPast: true };
+    tickets = tickets.map((t) => (t.id === ticket.id ? updated : t));
+    render();
+    showUndoBar(`Moved "${ticket.eventName}" to Past`);
+    pendingAction = { type: "movePast", ticket, timer: setTimeout(finalizePendingAction, UNDO_WINDOW_MS) };
   }
 
   function undoPendingAction() {
