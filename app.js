@@ -946,6 +946,8 @@
 
   // ---- Tabs ----
 
+  const VIEW_KEY = "showtime-view";
+
   const tabs = document.querySelectorAll(".tab");
   const views = {
     upcoming: document.getElementById("view-upcoming"),
@@ -960,11 +962,26 @@
       t.setAttribute("aria-current", t.dataset.view === view ? "page" : "false");
     });
     Object.entries(views).forEach(([key, el]) => (el.hidden = key !== currentView));
+    try {
+      sessionStorage.setItem(VIEW_KEY, view);
+    } catch {
+      // Storage blocked — the tab just won't survive a refresh.
+    }
   }
 
   tabs.forEach((tab) => {
     tab.addEventListener("click", () => switchView(tab.dataset.view));
   });
+
+  // Pull-to-refresh reloads the whole page, which would otherwise dump you
+  // back on Upcoming. sessionStorage (not localStorage) survives a reload but
+  // not closing the app, so a fresh launch still starts on Upcoming.
+  try {
+    const savedView = sessionStorage.getItem(VIEW_KEY);
+    if (savedView && views[savedView]) switchView(savedView);
+  } catch {
+    // Storage blocked — start on the default tab.
+  }
 
   // ---- Ticket modal ----
 

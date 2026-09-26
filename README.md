@@ -2,7 +2,7 @@
 
 A mobile-friendly PWA to keep track of tickets you've bought and see what's coming up. No build step — plain HTML/CSS/JavaScript, deployable to GitHub Pages, installable to your home screen, and works offline.
 
-Three tabs, switched via the bottom bar:
+Three tabs, switched via the bottom bar (the tab you're on survives a pull-to-refresh, via `sessionStorage` — not `localStorage`, so closing and reopening the app still starts on Upcoming):
 
 - **Upcoming** — has-a-ticket events, sorted soonest first, with a countdown badge (Today! / Tomorrow / In N days). Shows within 7 days get a highlighted orange card as an in-app reminder.
 - **Planned** — want to attend, no ticket bought yet. Sorted the same way as Upcoming; its icon is a calendar instead of a ticket, so it's visually obvious at a glance which shows still need a ticket. This is automatic, not a checkbox: an event lands here as long as it has no photo/PDF attached, and moves itself into Upcoming/Past (based on its date) the moment you attach one. Gets its own orange highlight + 🔔 reminder label as the date approaches — see "Reminders" below. For tickets that can *never* have a file — some vendors only show a live/rotating barcode inside their own app, nothing screenshot-able or downloadable — a left swipe in Planned moves it to Upcoming manually (with the same 3-second Undo as delete), setting an internal `ticketConfirmed` flag that short-circuits the file check.
