@@ -783,7 +783,8 @@ html, body {
 .ticket-thumb-placeholder { position: relative; }
 .conflict-badge {
   position: absolute;
-  top: -7px;
-  right: -7px;
-  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.25));
+  bottom: 8px;
+  right: 8px;
+  width: 15px;
+  height: 15px;
 }
