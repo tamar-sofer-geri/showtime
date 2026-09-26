@@ -621,18 +621,16 @@
     ph.innerHTML = '<span class="ticket-thumb-emoji">🎟️</span>';
     if (planned) {
       // Planned events get a calendar in place of the ticket. If anything
-      // else lands on the same day, it becomes the calendar-with-no-entry
-      // icon and drops the purple box — most urgent when the other event
-      // is one you already have tickets for.
+      // else lands on the same day, the same icon gets a small no-entry
+      // badge — most urgent when the other event is one you already have
+      // tickets for.
       const conflicts = findConflicts(t.date, t.id);
+      ph.innerHTML = PLANNED_ICON;
       if (conflicts.length) {
-        ph.classList.add("is-conflict");
         ph.title = conflicts.some((c) => !isPlanned(c))
           ? "Same day as an event you already have tickets for"
           : "Same day as another planned event";
-        ph.innerHTML = CONFLICT_ICON;
-      } else {
-        ph.innerHTML = PLANNED_ICON;
+        ph.insertAdjacentHTML("beforeend", NO_ENTRY_BADGE);
       }
     }
     thumbWrap.appendChild(ph);
@@ -1058,6 +1056,14 @@
     '<rect x="3" y="5" width="18" height="16" rx="2.5"/>' +
     '<path d="M3 10h18M8 3v4M16 3v4"/>' +
     '<path d="M8 14h.01M12 14h.01M16 14h.01M8 17.5h.01M12 17.5h.01" stroke-width="2.4"/>' +
+    "</svg>";
+
+  // Small red no-entry badge overlaid on a planned event's normal calendar box
+  // when it conflicts with another event.
+  const NO_ENTRY_BADGE =
+    '<svg class="conflict-badge" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">' +
+    '<circle cx="12" cy="12" r="10" fill="#fff" stroke="#c0392b" stroke-width="2.6"/>' +
+    '<path d="M5.5 18.5l13-13" stroke="#c0392b" stroke-width="2.6" stroke-linecap="round"/>' +
     "</svg>";
 
   function findConflicts(date, excludeId) {
