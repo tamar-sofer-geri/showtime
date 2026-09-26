@@ -621,16 +621,22 @@
     ph.innerHTML = '<span class="ticket-thumb-emoji">🎟️</span>';
     if (planned) {
       // Planned events get a calendar in place of the ticket. If anything
-      // else lands on the same day, the same icon gets a small no-entry
-      // badge — most urgent when the other event is one you already have
-      // tickets for.
-      const conflicts = findConflicts(t.date, t.id);
+      // else lands on the same day, the same icon gets a small badge: a red
+      // no-entry for a real overlap (start times under 3 hours apart),
+      // an amber clock when the times are far enough apart to work.
+      const conflicts = findConflicts(t.date, t.time, t.id);
       ph.innerHTML = PLANNED_ICON;
       if (conflicts.length) {
-        ph.title = conflicts.some((c) => !isPlanned(c))
-          ? "Same day as an event you already have tickets for"
-          : "Same day as another planned event";
-        ph.insertAdjacentHTML("beforeend", NO_ENTRY_BADGE);
+        const hard = conflicts.filter((c) => c.level === "hard");
+        if (hard.length) {
+          ph.title = hard.some((c) => !isPlanned(c.t))
+            ? "Overlaps an event you already have tickets for"
+            : "Overlaps another planned event";
+          ph.insertAdjacentHTML("beforeend", NO_ENTRY_BADGE);
+        } else {
+          ph.title = "Same day as another event, but the times don't overlap";
+          ph.insertAdjacentHTML("beforeend", CLOCK_BADGE);
+        }
       }
     }
     thumbWrap.appendChild(ph);
@@ -1029,17 +1035,27 @@
     syncHiddenTime();
   }
 
+  // Picking an hour with no minutes yet fills in :00 — most shows start on
+  // the hour, so that's one fewer thing to tap. Registered before the
+  // listeners below so the time is complete by the time they run.
+  timeHourSelect.addEventListener("change", () => {
+    if (timeHourSelect.value && !timeMinuteSelect.value) timeMinuteSelect.value = "00";
+  });
+
   [timeHourSelect, timeMinuteSelect].forEach((sel) => sel.addEventListener("change", syncHiddenTime));
 
   // ---- Schedule-conflict warning ----
   //
-  // Any other not-yet-past event on the same date counts as a conflict,
-  // regardless of time — an earlier version only flagged events within a
-  // 2-hour window of each other, which missed same-day events at different
-  // times (a matinee and an evening show) that still need a second look.
-  // Listed with their times and labeled by whether tickets are in hand
-  // (Upcoming) or it's still just Planned. Past events and the one being
-  // edited are ignored. Warns only — never blocks saving.
+  // Any other not-yet-past event on the same date is flagged, at one of two
+  // levels: "hard" when the start times are under 3 hours apart (or either
+  // has no time set, so overlap can't be ruled out) — a real double-booking
+  // risk; "soft" when it's the same day but the times are far enough apart
+  // that both are probably doable (an 11 AM and a 6:30 PM show). Listed
+  // with times and labeled by whether tickets are in hand (Upcoming) or
+  // still just Planned. Past events and the one being edited are ignored.
+  // Warns only — never blocks saving.
+
+  const CONFLICT_HARD_GAP_MIN = 180;
 
   const conflictWarningEl = document.getElementById("conflict-warning");
   const CONFLICT_ICON =
@@ -1065,39 +1081,70 @@
     '<circle cx="12" cy="12" r="10" fill="#fff" stroke="#c0392b" stroke-width="2.6"/>' +
     '<path d="M5.5 18.5l13-13" stroke="#c0392b" stroke-width="2.6" stroke-linecap="round"/>' +
     "</svg>";
+  // Softer amber clock badge: same day, but the times don't overlap.
+  const CLOCK_BADGE =
+    '<svg class="conflict-badge" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">' +
+    '<circle cx="12" cy="12" r="10" fill="#fff" stroke="#d97706" stroke-width="2.6"/>' +
+    '<path d="M12 6.5V12l3.6 2.2" fill="none" stroke="#d97706" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>' +
+    "</svg>";
+  const SOFT_ICON =
+    '<svg class="conflict-icon" viewBox="0 0 24 24" width="26" height="26" aria-hidden="true">' +
+    '<rect x="3" y="5" width="18" height="16" rx="2.5" fill="#fff" stroke="#7d7d94" stroke-width="1.6"/>' +
+    '<path d="M3 10h18" stroke="#7d7d94" stroke-width="1.6"/>' +
+    '<path d="M8 3v4M16 3v4" stroke="#7d7d94" stroke-width="1.6" stroke-linecap="round"/>' +
+    '<circle cx="16.5" cy="16.5" r="6" fill="#fff" stroke="#d97706" stroke-width="2"/>' +
+    '<path d="M16.5 13v3.6l2.3 1.4" fill="none" stroke="#d97706" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>' +
+    "</svg>";
 
-  function findConflicts(date, excludeId) {
+  function timeToMinutes(time) {
+    const [h, m] = time.split(":").map(Number);
+    return h * 60 + m;
+  }
+
+  // Returns [{ t, level }] for every other same-day, not-yet-past event.
+  function findConflicts(date, time, excludeId) {
     if (!date) return [];
     return tickets
       .filter((t) => t.id !== excludeId && t.date === date && isUpcoming(t) && !t.movedToPast)
-      .sort((a, b) => ticketDateTime(a) - ticketDateTime(b));
+      .sort((a, b) => ticketDateTime(a) - ticketDateTime(b))
+      .map((t) => {
+        const close = !time || !t.time || Math.abs(timeToMinutes(time) - timeToMinutes(t.time)) < CONFLICT_HARD_GAP_MIN;
+        return { t, level: close ? "hard" : "soft" };
+      });
   }
 
   function renderConflictWarning() {
-    const conflicts = findConflicts(ticketForm.date.value, editingId);
+    const conflicts = findConflicts(ticketForm.date.value, timeInput.value, editingId);
     if (!conflicts.length) {
       conflictWarningEl.hidden = true;
       conflictWarningEl.innerHTML = "";
       return;
     }
-    const ticketed = conflicts.some((t) => !isPlanned(t));
-    conflictWarningEl.className = "conflict-warning" + (ticketed ? " is-ticketed" : "");
+    const hard = conflicts.filter((c) => c.level === "hard");
+    const ticketed = hard.some((c) => !isPlanned(c.t));
+    conflictWarningEl.className =
+      "conflict-warning" + (!hard.length ? " is-soft" : ticketed ? " is-ticketed" : "");
     conflictWarningEl.innerHTML = "";
 
     const head = document.createElement("div");
     head.className = "conflict-head";
-    head.innerHTML = CONFLICT_ICON;
+    head.innerHTML = hard.length ? CONFLICT_ICON : SOFT_ICON;
     const title = document.createElement("strong");
-    title.textContent = ticketed ? "Double-booked — you already have tickets" : "Heads up — overlaps a planned event";
+    title.textContent = !hard.length
+      ? "Also that day — the times don't overlap"
+      : ticketed
+        ? "Double-booked — you already have tickets"
+        : "Heads up — clashes with a planned event";
     head.appendChild(title);
     conflictWarningEl.appendChild(head);
 
     const list = document.createElement("ul");
     list.className = "conflict-list";
-    for (const t of conflicts) {
+    for (const { t, level } of conflicts) {
       const li = document.createElement("li");
       const when = [formatDate(t.date), t.time ? formatTime(t.time) : "all day"].join(" · ");
-      li.textContent = `${t.eventName} — ${when} (${isPlanned(t) ? "planned, no tickets yet" : "tickets in hand"})`;
+      const status = isPlanned(t) ? "planned, no tickets yet" : "tickets in hand";
+      li.textContent = `${t.eventName} — ${when} (${status}${hard.length && level === "soft" ? "; different time" : ""})`;
       list.appendChild(li);
     }
     conflictWarningEl.appendChild(list);

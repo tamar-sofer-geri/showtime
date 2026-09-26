@@ -788,3 +788,8 @@ html, body {
   width: 15px;
   height: 15px;
 }
+.conflict-warning.is-soft {
+  border-color: #ebd08a;
+  background: #fdf6e3;
+}
+.conflict-warning.is-soft .conflict-head { color: #b7791f; }
