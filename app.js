@@ -616,19 +616,24 @@
     thumbWrap.className = "ticket-thumb-wrap";
     const ph = document.createElement("div");
     ph.className = "ticket-thumb-placeholder";
-    // Purple = a ticket is in hand (a real file, or manually confirmed via
-    // ticketConfirmed); white silhouette = still just planned — same emoji
-    // artwork either way, just recolored.
-    ph.innerHTML = planned
-      ? '<span class="ticket-thumb-emoji ticket-thumb-emoji-planned">🎟️</span>'
-      : '<span class="ticket-thumb-emoji">🎟️</span>';
-    // A planned event that overlaps one you already have tickets for gets
-    // the conflict icon in place of the ticket box entirely — the case
-    // worth catching at a glance, before buying tickets for it.
-    if (planned && findConflicts(t.date, t.time, t.id).some((c) => !isPlanned(c))) {
-      ph.classList.add("is-conflict");
-      ph.title = "Overlaps an event you already have tickets for";
-      ph.innerHTML = CONFLICT_ICON;
+    // Purple ticket = a ticket is in hand (a real file, or manually
+    // confirmed via ticketConfirmed); planned events swap it for a calendar.
+    ph.innerHTML = '<span class="ticket-thumb-emoji">🎟️</span>';
+    if (planned) {
+      // Planned events get a calendar in place of the ticket. If anything
+      // else lands on the same day, it becomes the calendar-with-no-entry
+      // icon and drops the purple box — most urgent when the other event
+      // is one you already have tickets for.
+      const conflicts = findConflicts(t.date, t.id);
+      if (conflicts.length) {
+        ph.classList.add("is-conflict");
+        ph.title = conflicts.some((c) => !isPlanned(c))
+          ? "Same day as an event you already have tickets for"
+          : "Same day as another planned event";
+        ph.innerHTML = CONFLICT_ICON;
+      } else {
+        ph.innerHTML = PLANNED_ICON;
+      }
     }
     thumbWrap.appendChild(ph);
     if (!files.length && t.ticketLink) {
@@ -1030,12 +1035,13 @@
 
   // ---- Schedule-conflict warning ----
   //
-  // Showtime stores a start time only, so an event is treated as a 2-hour
-  // window (same default the calendar export uses), or the whole day if it
-  // has no time. Any other not-yet-past event overlapping that window is
-  // listed, labeled by whether tickets are actually in hand (Upcoming) or
-  // it's still just Planned. Past events and the one being edited are
-  // ignored. Warns only — never blocks saving.
+  // Any other not-yet-past event on the same date counts as a conflict,
+  // regardless of time — an earlier version only flagged events within a
+  // 2-hour window of each other, which missed same-day events at different
+  // times (a matinee and an evening show) that still need a second look.
+  // Listed with their times and labeled by whether tickets are in hand
+  // (Upcoming) or it's still just Planned. Past events and the one being
+  // edited are ignored. Warns only — never blocks saving.
 
   const conflictWarningEl = document.getElementById("conflict-warning");
   const CONFLICT_ICON =
@@ -1046,28 +1052,23 @@
     '<circle cx="16.5" cy="16.5" r="6" fill="#fff" stroke="#c0392b" stroke-width="2"/>' +
     '<path d="M12.3 20.7l8.4-8.4" stroke="#c0392b" stroke-width="2" stroke-linecap="round"/>' +
     "</svg>";
+  // Plain white calendar for planned events that don't conflict with anything.
+  const PLANNED_ICON =
+    '<svg class="planned-icon" viewBox="0 0 24 24" width="28" height="28" aria-hidden="true" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round">' +
+    '<rect x="3" y="5" width="18" height="16" rx="2.5"/>' +
+    '<path d="M3 10h18M8 3v4M16 3v4"/>' +
+    '<path d="M8 14h.01M12 14h.01M16 14h.01M8 17.5h.01M12 17.5h.01" stroke-width="2.4"/>' +
+    "</svg>";
 
-  function eventWindow(date, time) {
-    const start = new Date(`${date}T${time || "00:00"}`);
-    const ms = time ? 2 * 60 * 60 * 1000 : 24 * 60 * 60 * 1000;
-    return { start, end: new Date(start.getTime() + ms) };
-  }
-
-  function findConflicts(date, time, excludeId) {
+  function findConflicts(date, excludeId) {
     if (!date) return [];
-    const mine = eventWindow(date, time);
-    if (Number.isNaN(mine.start.getTime())) return [];
     return tickets
-      .filter((t) => t.id !== excludeId && isUpcoming(t) && !t.movedToPast)
-      .filter((t) => {
-        const other = eventWindow(t.date, t.time);
-        return mine.start < other.end && other.start < mine.end;
-      })
+      .filter((t) => t.id !== excludeId && t.date === date && isUpcoming(t) && !t.movedToPast)
       .sort((a, b) => ticketDateTime(a) - ticketDateTime(b));
   }
 
   function renderConflictWarning() {
-    const conflicts = findConflicts(ticketForm.date.value, timeInput.value, editingId);
+    const conflicts = findConflicts(ticketForm.date.value, editingId);
     if (!conflicts.length) {
       conflictWarningEl.hidden = true;
       conflictWarningEl.innerHTML = "";

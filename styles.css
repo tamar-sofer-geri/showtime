@@ -194,12 +194,6 @@ html, body {
      tab bar. */
   filter: hue-rotate(265deg) saturate(2.5) brightness(0.8);
 }
-.ticket-thumb-emoji-planned {
-  /* Same glyph, crushed to a solid white silhouette instead of recolored —
-     signals "planned, no ticket in hand yet" as visibly different from the
-     purple filled-in version above. */
-  filter: brightness(0) invert(1);
-}
 .ticket-thumb-count {
   position: absolute;
   bottom: -4px;
