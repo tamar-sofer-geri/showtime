@@ -1064,7 +1064,7 @@
     '<path d="M3 10h18" stroke="#7d7d94" stroke-width="1.6"/>' +
     '<path d="M8 3v4M16 3v4" stroke="#7d7d94" stroke-width="1.6" stroke-linecap="round"/>' +
     '<circle cx="16.5" cy="16.5" r="6" fill="#fff" stroke="#c0392b" stroke-width="2"/>' +
-    '<path d="M12.3 20.7l8.4-8.4" stroke="#c0392b" stroke-width="2" stroke-linecap="round"/>' +
+    '<path d="M12.96 20.04l7.08-7.08" stroke="#c0392b" stroke-width="2" stroke-linecap="round"/>' +
     "</svg>";
   // Plain white calendar for planned events that don't conflict with anything.
   const PLANNED_ICON =
@@ -1074,12 +1074,14 @@
     '<path d="M8 14h.01M12 14h.01M16 14h.01M8 17.5h.01M12 17.5h.01" stroke-width="2.4"/>' +
     "</svg>";
 
+  // (Slash endpoints are kept inside the ring, not out at its outer edge —
+  // round caps flush with the edge read as poking out at this size.)
   // Small red no-entry badge overlaid on a planned event's normal calendar box
   // when it conflicts with another event.
   const NO_ENTRY_BADGE =
     '<svg class="conflict-badge" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">' +
     '<circle cx="12" cy="12" r="10" fill="#fff" stroke="#c0392b" stroke-width="2.6"/>' +
-    '<path d="M5.5 18.5l13-13" stroke="#c0392b" stroke-width="2.6" stroke-linecap="round"/>' +
+    '<path d="M6.34 17.66l11.32-11.32" stroke="#c0392b" stroke-width="2.6" stroke-linecap="round"/>' +
     "</svg>";
   // Softer amber clock badge: same day, but the times don't overlap.
   const CLOCK_BADGE =
