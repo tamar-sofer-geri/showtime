@@ -758,3 +758,31 @@ html, body {
   cursor: pointer;
   padding: 0;
 }
+
+/* Schedule-conflict warning (Add/Edit form) */
+.conflict-warning {
+  margin-top: 14px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1.5px solid #e8b4ae;
+  background: #fdf1ef;
+  color: var(--ink);
+  font-size: 13px;
+}
+.conflict-warning.is-ticketed {
+  border-color: var(--danger);
+  background: #fbe3e0;
+}
+.conflict-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--danger);
+  font-size: 14px;
+}
+.conflict-icon { flex: 0 0 auto; }
+.conflict-list {
+  margin: 8px 0 0;
+  padding-left: 34px;
+  line-height: 1.4;
+}
