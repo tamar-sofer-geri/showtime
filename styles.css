@@ -786,3 +786,10 @@ html, body {
   padding-left: 34px;
   line-height: 1.4;
 }
+.ticket-thumb-placeholder.is-conflict {
+  background: transparent;
+}
+.ticket-thumb-placeholder.is-conflict .conflict-icon {
+  width: 44px;
+  height: 44px;
+}

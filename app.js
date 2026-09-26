@@ -622,6 +622,14 @@
     ph.innerHTML = planned
       ? '<span class="ticket-thumb-emoji ticket-thumb-emoji-planned">🎟️</span>'
       : '<span class="ticket-thumb-emoji">🎟️</span>';
+    // A planned event that overlaps one you already have tickets for gets
+    // the conflict icon in place of the ticket box entirely — the case
+    // worth catching at a glance, before buying tickets for it.
+    if (planned && findConflicts(t.date, t.time, t.id).some((c) => !isPlanned(c))) {
+      ph.classList.add("is-conflict");
+      ph.title = "Overlaps an event you already have tickets for";
+      ph.innerHTML = CONFLICT_ICON;
+    }
     thumbWrap.appendChild(ph);
     if (!files.length && t.ticketLink) {
       const linkBadge = document.createElement("span");
