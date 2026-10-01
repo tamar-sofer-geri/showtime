@@ -351,6 +351,16 @@
     return "אבגדהו".indexOf(m[2]); // א=Sun ... ו=Fri
   }
 
+  // Some sharing apps put a bare URL the user shared into the share
+  // target's "text" field rather than "url" (which field a share lands in
+  // is up to the sharing app / OS, not something this app controls) — catch
+  // that case too so a web-ticket link still gets saved either way.
+  function bareUrlOrNull(s) {
+    if (!s) return null;
+    const trimmed = s.trim();
+    return /^https?:\/\/\S+$/i.test(trimmed) ? trimmed : null;
+  }
+
   function parseSharedText(title, text) {
     const combined = [title, text].filter(Boolean).join("\n");
     const result = { eventName: "", venue: "", date: "", time: "", price: "", seat: "", source: "", confirmation: "" };
@@ -602,12 +612,14 @@
   const emptyPastEl = document.getElementById("empty-past");
 
   // A ticket is "planned" by not having any attached file yet — attach a
-  // photo/PDF (the actual ticket) and it moves itself into Upcoming/Past
-  // based on its date. ticketConfirmed is the manual escape hatch for
-  // tickets that can never have a file (e.g. a vendor's live rotating
-  // barcode, only viewable in their app) — left-swipe in Planned sets it.
+  // photo/PDF (the actual ticket) OR a saved ticket link (just as real —
+  // e.g. an Eventim e-ticket page with a live QR code, just not a file) and
+  // it moves itself into Upcoming/Past based on its date. ticketConfirmed is
+  // the manual escape hatch for tickets that can never have a file or a
+  // link either (e.g. a vendor's live rotating barcode only viewable in
+  // their own app, no URL to save) — left-swipe in Planned sets it.
   function isPlanned(t) {
-    return getTicketFiles(t).length === 0 && !t.ticketConfirmed;
+    return getTicketFiles(t).length === 0 && getTicketLinks(t).length === 0 && !t.ticketConfirmed;
   }
 
   function render() {
@@ -651,13 +663,14 @@
 
     // Left swipe: Planned -> Upcoming always (the ticketConfirmed escape
     // hatch). Within Upcoming it depends on why the ticket's there: a real
-    // file attached -> Past (done with it / archiving early, doesn't need
-    // to wait for the date), otherwise -> Planned (undoes the ticketConfirmed
-    // override — a ticket with a real file can't be swiped back to Planned,
-    // since that would mean discarding the attachment, too big a step for a
-    // swipe, so it only ever goes to Past instead).
+    // file or a saved link -> Past (done with it / archiving early, doesn't
+    // need to wait for the date), otherwise -> Planned (undoes the
+    // ticketConfirmed override — a ticket with a real file or link can't be
+    // swiped back to Planned, since that would mean discarding it, too big
+    // a step for a swipe, so it only ever goes to Past instead).
+    const links = getTicketLinks(t);
+    const canMoveToPast = listKind === "upcoming" && (files.length > 0 || links.length > 0);
     const canMoveToUpcoming = listKind === "planned";
-    const canMoveToPast = listKind === "upcoming" && files.length > 0;
     const canMoveToPlanned = listKind === "upcoming" && !canMoveToPast && !!t.ticketConfirmed;
     const canSwipeLeft = canMoveToUpcoming || canMoveToPast || canMoveToPlanned;
     let moveBg = null;
@@ -704,7 +717,7 @@
       }
     }
     thumbWrap.appendChild(ph);
-    if (!files.length && getTicketLinks(t).length) {
+    if (!files.length && links.length) {
       const linkBadge = document.createElement("span");
       linkBadge.className = "ticket-thumb-count";
       linkBadge.textContent = "🔗";
@@ -1006,7 +1019,14 @@
       return;
     }
     const links = getTicketLinks(t);
-    if (links.length) window.open(links[0], "_blank", "noopener");
+    if (links.length === 1) {
+      window.open(links[0], "_blank", "noopener");
+    } else if (links.length > 1) {
+      // More than one link and nothing to carousel through like files get —
+      // open the info screen instead of guessing which one, so every link
+      // stays reachable in one tap rather than just the first.
+      openInfoModal(t.id);
+    }
   }
 
   // ---- Tabs ----
@@ -1685,6 +1705,10 @@
   ticketForm.addEventListener("submit", async (e) => {
     e.preventDefault();
     syncHiddenTime();
+    // A link typed/pasted but never explicitly added (forgot to tap "Add",
+    // or just didn't realize it was a separate step) shouldn't be silently
+    // lost — Save is the real commit action, so pull it in here too.
+    addWorkingLink();
     const fd = new FormData(ticketForm);
     const ticketId = editingId || crypto.randomUUID();
     const existing = editingId ? tickets.find((x) => x.id === editingId) : null;
@@ -2182,6 +2206,11 @@
       share.fileType = null;
       share.fileName = null;
     }
+
+    // A bare link shared with nothing else (no email body text) can land in
+    // either field depending on the sharing app, so treat a text-only share
+    // that's just a URL the same as one that arrived in the url field.
+    share.url = share.url || bareUrlOrNull(share.text);
 
     const parsed = parseSharedText(share.title, share.text || share.url);
 
