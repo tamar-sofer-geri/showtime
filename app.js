@@ -338,6 +338,19 @@
     return /\.(jpe?g|png|gif|webp|heic|pdf)$/i.test(s) || /^(img|screenshot|photo)[\s_-]?\d*/i.test(s);
   }
 
+  // Looks for a weekday name — English or Hebrew ("יום ב׳" style, plus
+  // "שבת" for Saturday) — to disambiguate an otherwise-ambiguous slash date.
+  // Returns a JS Date.getDay() index (0 = Sunday) or null if none found.
+  const WEEKDAY_RE =
+    /\b(sun|mon|tue|wed|thu|fri|sat)[a-z]*\b|יום\s*([א-ו])['׳]?|(שבת)/i;
+  function parseWeekdayHint(s) {
+    const m = s.match(WEEKDAY_RE);
+    if (!m) return null;
+    if (m[1]) return ["sun", "mon", "tue", "wed", "thu", "fri", "sat"].indexOf(m[1].toLowerCase());
+    if (m[3]) return 6; // שבת = Saturday
+    return "אבגדהו".indexOf(m[2]); // א=Sun ... ו=Fri
+  }
+
   function parseSharedText(title, text) {
     const combined = [title, text].filter(Boolean).join("\n");
     const result = { eventName: "", venue: "", date: "", time: "", price: "", seat: "", source: "", confirmation: "" };
@@ -363,6 +376,7 @@
 
     const monthNames = "January|February|March|April|May|June|July|August|September|October|November|December|Jan|Feb|Mar|Apr|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec";
     const dateRe = new RegExp(`\\b(${monthNames})\\.?\\s+(\\d{1,2})(?:st|nd|rd|th)?,?\\s*(\\d{4})?`, "i");
+    const SLASH_DATE_RE = /\b(\d{1,2})\/(\d{1,2})\/(\d{2,4})\b/;
     const dateMatch = combined.match(dateRe);
     if (dateMatch) {
       const year = dateMatch[3] || String(new Date().getFullYear());
@@ -375,22 +389,52 @@
         result.date = parsed.toISOString().slice(0, 10);
       }
     } else {
-      const slashMatch = combined.match(/\b(\d{1,2})\/(\d{1,2})\/(\d{2,4})\b/);
+      const slashMatch = combined.match(SLASH_DATE_RE);
       if (slashMatch) {
-        let [, mm, dd, yy] = slashMatch;
+        let [, a, b, yy] = slashMatch;
         if (yy.length === 2) yy = "20" + yy;
-        const parsed = new Date(`${yy}-${mm.padStart(2, "0")}-${dd.padStart(2, "0")}T00:00`);
+        const an = Number(a);
+        const bn = Number(b);
+        // Slash dates are ambiguous (MM/DD, US style, vs DD/MM, most of the
+        // rest of the world — including the Hebrew listings this app
+        // increasingly sees shared in). Default to MM/DD, matching the US
+        // ticketing emails this was originally tuned against, but override
+        // it when: only one order is even a valid date (a month can't be >
+        // 12), or a weekday name elsewhere in the text (English or Hebrew)
+        // tells us which interpretation actually falls on that weekday.
+        let mm = an,
+          dd = bn;
+        if (an > 12 && bn <= 12) {
+          mm = bn;
+          dd = an;
+        } else if (an <= 12 && bn <= 12 && an !== bn) {
+          const weekday = parseWeekdayHint(combined);
+          if (weekday !== null) {
+            const asMmDd = new Date(`${yy}-${String(an).padStart(2, "0")}-${String(bn).padStart(2, "0")}T00:00`);
+            const asDdMm = new Date(`${yy}-${String(bn).padStart(2, "0")}-${String(an).padStart(2, "0")}T00:00`);
+            if (!Number.isNaN(asDdMm.getTime()) && asDdMm.getDay() === weekday && asMmDd.getDay() !== weekday) {
+              mm = bn;
+              dd = an;
+            }
+          }
+        }
+        const parsed = new Date(`${yy}-${String(mm).padStart(2, "0")}-${String(dd).padStart(2, "0")}T00:00`);
         if (!Number.isNaN(parsed.getTime())) result.date = parsed.toISOString().slice(0, 10);
       }
     }
 
-    const timeMatch = combined.match(/\b(\d{1,2}):(\d{2})\s?(AM|PM|am|pm)\b/);
-    if (timeMatch) {
-      let h = parseInt(timeMatch[1], 10);
-      const ampm = timeMatch[3].toLowerCase();
+    const ampmMatch = combined.match(/\b(\d{1,2}):(\d{2})\s?(AM|PM|am|pm)\b/);
+    // Plain 24-hour time (e.g. "20:00") — common everywhere outside the US —
+    // has no AM/PM marker to match above, so it needs its own pattern.
+    const h24Match = !ampmMatch && combined.match(/\b([01]?\d|2[0-3]):([0-5]\d)\b/);
+    if (ampmMatch) {
+      let h = parseInt(ampmMatch[1], 10);
+      const ampm = ampmMatch[3].toLowerCase();
       if (ampm === "pm" && h !== 12) h += 12;
       if (ampm === "am" && h === 12) h = 0;
-      result.time = `${String(h).padStart(2, "0")}:${timeMatch[2]}`;
+      result.time = `${String(h).padStart(2, "0")}:${ampmMatch[2]}`;
+    } else if (h24Match) {
+      result.time = `${h24Match[1].padStart(2, "0")}:${h24Match[2]}`;
     }
 
     // Ticket-detail blocks (Eventbrite among others) often print a literal
@@ -446,11 +490,17 @@
     // phrasing the heuristics above look for. Anchor on whichever line has
     // the date: the first non-junk line before it is the name, the line
     // right after it is the venue.
-    const dateLineIndex = rawLines.findIndex((l) => dateRe.test(l));
+    // Month-name dates were the only thing checked here before, so a listing
+    // with only a numeric/slash date (common outside the US — the Hebrew
+    // listings above included) never anchored this fallback at all, leaving
+    // both eventName and venue blank even though the date itself parsed.
+    const dateLineIndex = rawLines.findIndex((l) => dateRe.test(l) || SLASH_DATE_RE.test(l));
 
     // Some share sources (e.g. Safari/Notes sharing selected text) prepend a
     // line like "Included Link:" or the raw URL ahead of the actual content —
     // skip lines like that rather than assuming line 0 is always the name.
+    // A bare "Label:" line (date/venue label text printed on its own line,
+    // value on the next) counts too, in either language.
     function looksLikeShareJunk(l) {
       return (
         /^https?:\/\//i.test(l) ||
@@ -458,7 +508,8 @@
         /^sent from\b/i.test(l) ||
         /^shared (from|via)\b/i.test(l) ||
         /^(dear|hi|hello)\b/i.test(l) ||
-        /[{}]/.test(l)
+        /[{}]/.test(l) ||
+        /^.{1,24}:\s*$/.test(l)
       );
     }
 
@@ -469,14 +520,17 @@
       }
     }
 
-    if (!result.venue && dateLineIndex >= 0 && dateLineIndex + 1 < rawLines.length) {
-      const candidate = rawLines[dateLineIndex + 1];
-      const looksLikeNotVenue =
-        /^(view|buy|get|register|rsvp|section|order|ticket)/i.test(candidate) ||
-        /^https?:\/\//i.test(candidate) ||
-        /^\$/.test(candidate) ||
-        dateRe.test(candidate);
-      if (candidate.length <= 60 && !looksLikeNotVenue) {
+    if (!result.venue && dateLineIndex >= 0) {
+      const candidate = rawLines.slice(dateLineIndex + 1).find((l) => {
+        const looksLikeNotVenue =
+          looksLikeShareJunk(l) ||
+          /^(view|buy|get|register|rsvp|section|order|ticket)/i.test(l) ||
+          /^\$/.test(l) ||
+          dateRe.test(l) ||
+          SLASH_DATE_RE.test(l);
+        return !looksLikeNotVenue;
+      });
+      if (candidate && candidate.length <= 60) {
         result.venue = candidate;
       }
     }
