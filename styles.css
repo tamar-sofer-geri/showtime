@@ -387,6 +387,10 @@ html, body {
   text-align: right;
   word-break: break-word;
 }
+.info-link {
+  color: var(--accent-strong);
+  text-decoration: none;
+}
 .modal-close-btn {
   position: absolute;
   top: 18px;
@@ -523,6 +527,14 @@ html, body {
   font-size: 18px;
 }
 .file-list-name { cursor: pointer; }
+
+.link-add-row {
+  display: flex;
+  gap: 8px;
+  align-items: stretch;
+}
+.link-add-row input { flex: 1 1 auto; }
+.link-add-row .btn { flex: 0 0 auto; padding: 0 16px; }
 
 .modal-actions {
   display: flex;

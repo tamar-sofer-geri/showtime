@@ -16,7 +16,7 @@
   <link rel="apple-touch-icon" href="apple-touch-icon.png?v=3" />
   <link rel="icon" href="icon.svg?v=3" type="image/svg+xml" />
   <title>Showtime</title>
-  <link rel="stylesheet" href="styles.css?v=29" />
+  <link rel="stylesheet" href="styles.css?v=30" />
 </head>
 <body>
   <div class="app">
@@ -130,9 +130,13 @@
         <p class="field-hint">No file attached yet? This shows under <strong>Planned</strong> instead of Upcoming until you add one.</p>
         <ul id="file-list" class="file-list"></ul>
 
-        <label for="ticket-link-input">Link to view ticket (if it can't be attached)</label>
-        <input id="ticket-link-input" name="ticketLink" type="url" inputmode="url" autocomplete="off" placeholder="e.g. a link to open it in the vendor's app" />
-        <p class="field-hint">For live/rotating barcodes some vendors only show in their own app — press and hold the card to open this link, and swipe the card left in Planned to move it to Upcoming.</p>
+        <label for="ticket-link-input">Links to view ticket (if it can't be attached)</label>
+        <div class="link-add-row">
+          <input id="ticket-link-input" type="url" inputmode="url" autocomplete="off" placeholder="e.g. a link to open it in the vendor's app" />
+          <button type="button" id="ticket-link-add-btn" class="btn btn-ghost-outline">Add</button>
+        </div>
+        <p class="field-hint">For live/rotating barcodes some vendors only show in their own app — press and hold the card to open the first link, and swipe the card left in Planned to move it to Upcoming. Add more than one if you're tracking tickets for multiple seats.</p>
+        <ul id="ticket-link-list" class="file-list"></ul>
 
         <div class="modal-actions">
           <button type="button" class="btn btn-ghost" data-close>Cancel</button>
@@ -262,6 +266,6 @@
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-storage-compat.js"></script>
-  <script src="app.js?v=46"></script>
+  <script src="app.js?v=48"></script>
 </body>
 </html>

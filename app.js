@@ -553,6 +553,7 @@
   let editingId = null;
   let infoTicketId = null; // ticket currently shown in the read-only info modal
   let workingFiles = []; // [{ blob, name, type }] (freshly picked) or [{ url, path, name, type }] (already in cloud Storage)
+  let workingLinks = []; // [url, ...]
   let modalSnapshot = ""; // form state as of when the modal opened, to detect unsaved changes on close
   let filesPendingStorageDeletion = []; // Storage paths removed from workingFiles this edit, deleted on Save (cloud mode)
   const objectUrls = [];
@@ -572,6 +573,15 @@
   function getTicketFiles(t) {
     if (t.files && t.files.length) return t.files;
     if (t.fileBlob) return [{ blob: t.fileBlob, type: t.fileType, name: t.fileName }];
+    return [];
+  }
+
+  // ticketLinks is the current (list) shape; ticketLink is the older
+  // single-string shape still present on records saved before multiple
+  // links were supported.
+  function getTicketLinks(t) {
+    if (t.ticketLinks && t.ticketLinks.length) return t.ticketLinks;
+    if (t.ticketLink) return [t.ticketLink];
     return [];
   }
 
@@ -694,7 +704,7 @@
       }
     }
     thumbWrap.appendChild(ph);
-    if (!files.length && t.ticketLink) {
+    if (!files.length && getTicketLinks(t).length) {
       const linkBadge = document.createElement("span");
       linkBadge.className = "ticket-thumb-count";
       linkBadge.textContent = "🔗";
@@ -993,9 +1003,10 @@
     const files = getTicketFiles(t);
     if (files.length) {
       openAttachmentCarousel(files, 0);
-    } else if (t.ticketLink) {
-      window.open(t.ticketLink, "_blank", "noopener");
+      return;
     }
+    const links = getTicketLinks(t);
+    if (links.length) window.open(links[0], "_blank", "noopener");
   }
 
   // ---- Tabs ----
@@ -1044,6 +1055,9 @@
   const ticketForm = document.getElementById("ticket-form");
   const fileInput = document.getElementById("file-input");
   const fileListEl = document.getElementById("file-list");
+  const ticketLinkInput = document.getElementById("ticket-link-input");
+  const ticketLinkAddBtn = document.getElementById("ticket-link-add-btn");
+  const ticketLinkListEl = document.getElementById("ticket-link-list");
   const unsavedModal = document.getElementById("unsaved-modal");
 
   // ---- Time picker (custom hour/minute/AM-PM selects, not the native
@@ -1240,7 +1254,7 @@
       seat: ticketForm.seat.value,
       source: ticketForm.source.value,
       confirmation: ticketForm.confirmation.value,
-      ticketLink: ticketForm.ticketLink.value,
+      ticketLinks: workingLinks.slice(),
       files: workingFiles.map((f) => `${f.name}|${f.type}|${f.blob ? f.blob.size : f.path || ""}`),
     });
   }
@@ -1252,6 +1266,7 @@
   function openAddModal(prefill) {
     editingId = null;
     workingFiles = [];
+    workingLinks = [];
     filesPendingStorageDeletion = [];
     ticketModalTitle.textContent = "Add event";
     ticketForm.reset();
@@ -1266,7 +1281,7 @@
       ticketForm.seat.value = prefill.seat || "";
       ticketForm.source.value = prefill.source || "";
       ticketForm.confirmation.value = prefill.confirmation || "";
-      ticketForm.ticketLink.value = prefill.ticketLink || "";
+      if (prefill.ticketLink) workingLinks.push(prefill.ticketLink);
       if (prefill.fileBlob) {
         workingFiles.push({ blob: prefill.fileBlob, name: prefill.fileName, type: prefill.fileType });
       }
@@ -1274,6 +1289,7 @@
 
     modalSnapshot = snapshotFormState();
     renderFileList();
+    renderLinkList();
     renderConflictWarning();
     ticketModal.hidden = false;
     document.getElementById("event-input").focus();
@@ -1284,6 +1300,7 @@
     if (!t) return;
     editingId = id;
     workingFiles = getTicketFiles(t).slice();
+    workingLinks = getTicketLinks(t).slice();
     filesPendingStorageDeletion = [];
     ticketModalTitle.textContent = "Edit event";
     ticketForm.reset();
@@ -1295,9 +1312,9 @@
     ticketForm.seat.value = t.seat || "";
     ticketForm.source.value = t.source || "";
     ticketForm.confirmation.value = t.confirmation || "";
-    ticketForm.ticketLink.value = t.ticketLink || "";
     modalSnapshot = snapshotFormState();
     renderFileList();
+    renderLinkList();
     renderConflictWarning();
     ticketModal.hidden = false;
   }
@@ -1314,6 +1331,7 @@
     ticketModal.hidden = true;
     editingId = null;
     workingFiles = [];
+    workingLinks = [];
     filesPendingStorageDeletion = [];
   }
 
@@ -1366,6 +1384,58 @@
     renderFileList();
   });
 
+  function renderLinkList() {
+    ticketLinkListEl.innerHTML = "";
+    workingLinks.forEach((url, i) => {
+      const row = document.createElement("li");
+      row.className = "file-preview";
+
+      const icon = document.createElement("div");
+      icon.className = "file-list-icon";
+      icon.textContent = "🔗";
+      icon.addEventListener("click", () => window.open(url, "_blank", "noopener"));
+      row.appendChild(icon);
+
+      const name = document.createElement("span");
+      name.className = "file-preview-name file-list-name";
+      name.textContent = url;
+      name.addEventListener("click", () => window.open(url, "_blank", "noopener"));
+      row.appendChild(name);
+
+      const removeBtn = document.createElement("button");
+      removeBtn.type = "button";
+      removeBtn.className = "file-remove-btn";
+      removeBtn.setAttribute("aria-label", "Remove link");
+      removeBtn.textContent = "×";
+      removeBtn.addEventListener("click", () => {
+        workingLinks.splice(i, 1);
+        renderLinkList();
+      });
+      row.appendChild(removeBtn);
+
+      ticketLinkListEl.appendChild(row);
+    });
+  }
+
+  function addWorkingLink() {
+    const url = ticketLinkInput.value.trim();
+    if (!url || workingLinks.includes(url)) {
+      ticketLinkInput.value = "";
+      return;
+    }
+    workingLinks.push(url);
+    ticketLinkInput.value = "";
+    renderLinkList();
+  }
+
+  ticketLinkAddBtn.addEventListener("click", addWorkingLink);
+  ticketLinkInput.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      addWorkingLink();
+    }
+  });
+
   document.getElementById("header-add-btn").addEventListener("click", openAddModal);
 
   ticketModal.querySelectorAll("[data-close]").forEach((el) => el.addEventListener("click", attemptCloseTicketModal));
@@ -1412,6 +1482,23 @@
     ticketInfoRows.appendChild(row);
   }
 
+  function addLinkRow(label, url) {
+    const row = document.createElement("div");
+    row.className = "info-row";
+    const l = document.createElement("span");
+    l.className = "info-label";
+    l.textContent = label;
+    const v = document.createElement("a");
+    v.className = "info-value info-link";
+    v.href = url;
+    v.target = "_blank";
+    v.rel = "noopener";
+    v.textContent = "Open ↗";
+    row.appendChild(l);
+    row.appendChild(v);
+    ticketInfoRows.appendChild(row);
+  }
+
   function openInfoModal(id) {
     const t = tickets.find((x) => x.id === id);
     if (!t) return;
@@ -1428,12 +1515,12 @@
     addInfoRow("Purchased from", t.source);
     addInfoRow("Confirmation #", t.confirmation);
 
+    const links = getTicketLinks(t);
+    links.forEach((url, i) => addLinkRow(links.length > 1 ? `Ticket link ${i + 1}` : "Ticket link", url));
+
     const files = getTicketFiles(t);
     if (files.length) {
       ticketInfoViewBtn.textContent = files.length > 1 ? `🎟️ View ${files.length} attached files` : "🎟️ View attached ticket";
-      ticketInfoViewBtn.hidden = false;
-    } else if (t.ticketLink) {
-      ticketInfoViewBtn.textContent = "🔗 Open ticket link";
       ticketInfoViewBtn.hidden = false;
     } else {
       ticketInfoViewBtn.hidden = true;
@@ -1620,7 +1707,7 @@
         seat: fd.get("seat").trim(),
         source: fd.get("source").trim(),
         confirmation: fd.get("confirmation").trim(),
-        ticketLink: fd.get("ticketLink").trim(),
+        ticketLinks: workingLinks.slice(),
         // Not a form field — set only via the left-swipe-to-upcoming
         // gesture in Planned, so carry it forward rather than dropping it.
         ticketConfirmed: !!(existing && existing.ticketConfirmed),
@@ -1746,7 +1833,7 @@
   let pendingShare = null; // { parsed, fileBlob, fileType, fileName } while the choice/picker modals are open
 
   function openShareChoiceModal(parsed, share) {
-    pendingShare = { parsed, fileBlob: share.fileBlob, fileType: share.fileType, fileName: share.fileName };
+    pendingShare = { parsed, fileBlob: share.fileBlob, fileType: share.fileType, fileName: share.fileName, url: share.url };
 
     shareChoicePreview.innerHTML = "";
     if (share.fileBlob && share.fileType && share.fileType.startsWith("image/")) {
@@ -1870,6 +1957,16 @@
     fillIfEmpty(ticketForm.seat, parsed.seat);
     fillIfEmpty(ticketForm.source, parsed.source);
     fillIfEmpty(ticketForm.confirmation, parsed.confirmation);
+    // Some vendor tickets (web e-tickets, like Eventim's) only ever offer a
+    // page link to share, never a downloadable file — the link itself is
+    // the closest thing to "the ticket" in that case, so it's worth saving
+    // even though it's not a file attachment. Append rather than overwrite:
+    // an event can have tickets for more than one seat, each with its own
+    // link, and sharing a second one shouldn't silently lose the first.
+    if (share.url && !workingLinks.includes(share.url)) {
+      workingLinks.push(share.url);
+      renderLinkList();
+    }
 
     if (share.fileBlob) {
       workingFiles.push({ blob: share.fileBlob, name: share.fileName, type: share.fileType });
@@ -2091,7 +2188,7 @@
     if (tickets.length > 0) {
       openShareChoiceModal(parsed, share);
     } else {
-      openAddModal({ ...parsed, fileBlob: share.fileBlob, fileType: share.fileType, fileName: share.fileName });
+      openAddModal({ ...parsed, fileBlob: share.fileBlob, fileType: share.fileType, fileName: share.fileName, ticketLink: share.url });
     }
   }
 
