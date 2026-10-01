@@ -595,6 +595,15 @@
     return [];
   }
 
+  // Files and links together, in the single order the attachment carousel
+  // swipes through: whichever "the ticket" actually is for this event,
+  // whether that's a photo, a PDF, or a link to a live web e-ticket.
+  function getTicketViewables(t) {
+    const items = getTicketFiles(t).map((file) => ({ kind: "file", file }));
+    getTicketLinks(t).forEach((url) => items.push({ kind: "link", url }));
+    return items;
+  }
+
   // A file entry is either a freshly-picked local blob (.blob) or an
   // already-uploaded cloud file (.url, no .blob) — this is the one place
   // that turns either into something an <img>/etc. can point at.
@@ -1013,20 +1022,17 @@
   undoBtn.addEventListener("click", undoPendingAction);
 
   function openAttachmentForTicket(t) {
-    const files = getTicketFiles(t);
-    if (files.length) {
-      openAttachmentCarousel(files, 0);
+    const items = getTicketViewables(t);
+    if (!items.length) return;
+    // A single link has nothing to swipe to, so skip the viewer and jump
+    // straight to it — the common case stays one tap. Everything else
+    // (any file, or more than one item of either kind) opens the carousel,
+    // swiping across files and links together in one place.
+    if (items.length === 1 && items[0].kind === "link") {
+      window.open(items[0].url, "_blank", "noopener");
       return;
     }
-    const links = getTicketLinks(t);
-    if (links.length === 1) {
-      window.open(links[0], "_blank", "noopener");
-    } else if (links.length > 1) {
-      // More than one link and nothing to carousel through like files get —
-      // open the info screen instead of guessing which one, so every link
-      // stays reachable in one tap rather than just the first.
-      openInfoModal(t.id);
-    }
+    openAttachmentCarousel(items, 0);
   }
 
   // ---- Tabs ----
@@ -1371,13 +1377,13 @@
         thumb.className = "file-list-icon";
         thumb.textContent = "📄";
       }
-      thumb.addEventListener("click", () => openAttachmentCarousel(workingFiles, i));
+      thumb.addEventListener("click", () => openAttachmentCarousel(workingFiles.map((wf) => ({ kind: "file", file: wf })), i));
       row.appendChild(thumb);
 
       const name = document.createElement("span");
       name.className = "file-preview-name file-list-name";
       name.textContent = f.name || "Attachment";
-      name.addEventListener("click", () => openAttachmentCarousel(workingFiles, i));
+      name.addEventListener("click", () => openAttachmentCarousel(workingFiles.map((wf) => ({ kind: "file", file: wf })), i));
       row.appendChild(name);
 
       const removeBtn = document.createElement("button");
@@ -1538,9 +1544,16 @@
     const links = getTicketLinks(t);
     links.forEach((url, i) => addLinkRow(links.length > 1 ? `Ticket link ${i + 1}` : "Ticket link", url));
 
+    // Mixing files and links opens the same combined carousel as a
+    // long-press on the card, so the button's label covers the full count
+    // rather than just the file half of it.
     const files = getTicketFiles(t);
-    if (files.length) {
-      ticketInfoViewBtn.textContent = files.length > 1 ? `🎟️ View ${files.length} attached files` : "🎟️ View attached ticket";
+    const viewableCount = files.length + links.length;
+    if (viewableCount > 1) {
+      ticketInfoViewBtn.textContent = `🎟️ View all ${viewableCount}`;
+      ticketInfoViewBtn.hidden = false;
+    } else if (files.length === 1) {
+      ticketInfoViewBtn.textContent = "🎟️ View attached ticket";
       ticketInfoViewBtn.hidden = false;
     } else {
       ticketInfoViewBtn.hidden = true;
@@ -1788,35 +1801,59 @@
     container.appendChild(openLink);
   }
 
-  // The full-size viewer for one or more of a ticket's attached files —
-  // swipeable (native horizontal scroll-snap, no custom gesture code) when
-  // there's more than one, with page dots to match. startIndex lets a tap
-  // on a specific file (e.g. in the edit form's file list) open the
-  // carousel already on that one.
-  function openAttachmentCarousel(files, startIndex) {
+  // A link can't render inline any more than a PDF can, so it gets the same
+  // treatment: an icon and an "Open" button rather than a live preview.
+  // Reuses the PDF slide's classes — same card look, different icon/label.
+  function renderLinkSlideInto(container, url) {
+    container.innerHTML = "";
+    const icon = document.createElement("div");
+    icon.className = "attachment-pdf-icon";
+    icon.textContent = "🔗";
+    container.appendChild(icon);
+    const openLink = document.createElement("a");
+    openLink.className = "attachment-pdf-open-link";
+    openLink.textContent = "Open ticket link";
+    openLink.target = "_blank";
+    openLink.rel = "noopener";
+    openLink.href = url;
+    container.appendChild(openLink);
+  }
+
+  // The full-size viewer for one or more of a ticket's files and/or saved
+  // links together — swipeable (native horizontal scroll-snap, no custom
+  // gesture code) when there's more than one, with page dots to match.
+  // `items` is the shape getTicketViewables() returns: { kind: "file", file }
+  // or { kind: "link", url }. startIndex lets a tap on a specific one (e.g.
+  // in the edit form's file list) open the carousel already on that one.
+  function openAttachmentCarousel(items, startIndex) {
     attachmentCarousel.innerHTML = "";
     attachmentDots.innerHTML = "";
-    attachmentDots.hidden = files.length <= 1;
+    attachmentDots.hidden = items.length <= 1;
 
-    files.forEach((f, i) => {
+    items.forEach((item, i) => {
       const slide = document.createElement("div");
       slide.className = "attachment-slide";
 
-      if (f.type && f.type.startsWith("image/")) {
+      if (item.kind === "link") {
+        const linkContainer = document.createElement("div");
+        linkContainer.className = "attachment-pdf";
+        slide.appendChild(linkContainer);
+        renderLinkSlideInto(linkContainer, item.url);
+      } else if (item.file.type && item.file.type.startsWith("image/")) {
         const img = document.createElement("img");
         img.alt = "";
-        img.src = fileImageSrc(f);
+        img.src = fileImageSrc(item.file);
         slide.appendChild(img);
       } else {
         const pdfContainer = document.createElement("div");
         pdfContainer.className = "attachment-pdf";
         slide.appendChild(pdfContainer);
-        renderPdfSlideInto(pdfContainer, f);
+        renderPdfSlideInto(pdfContainer, item.file);
       }
 
       attachmentCarousel.appendChild(slide);
 
-      if (files.length > 1) {
+      if (items.length > 1) {
         const dot = document.createElement("span");
         dot.className = "attachment-dot" + (i === startIndex ? " is-active" : "");
         attachmentDots.appendChild(dot);
